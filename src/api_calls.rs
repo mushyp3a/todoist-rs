@@ -1,227 +1,150 @@
-use color_eyre::eyre::{Context, Result};
-use reqwest::Client;
+use std::future::Future;
+use std::sync::mpsc::Sender;
 
-use crate::projects;
-use crate::sections;
-use crate::tasks;
-use crate::tasks::Task;
-use crate::TaskResult;
+use color_eyre::eyre::{eyre, Context, Result};
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
+use serde::de::DeserializeOwned;
+
+use crate::{projects::Project, sections::Section, tasks::Task, TaskResult};
+
+const API_URL: &str = "https://api.todoist.com/api/v1";
 
 // 200 is the largest page the Unified API v1 accepts; larger values return an
 // empty result set instead of an error.
 const PAGE_LIMIT: u32 = 200;
 
-fn next_cursor(parsed_json: &serde_json::Value) -> Option<String> {
-    parsed_json
-        .get("next_cursor")
+/// Runs an API call in the background; a failure is shown in the error modal.
+pub fn spawn_call(tx: Sender<TaskResult>, call: impl Future<Output = Result<()>> + Send + 'static) {
+    tokio::spawn(async move {
+        if let Err(error) = call.await {
+            let _ = tx.send(TaskResult::Error(format!("{error:#}")));
+        }
+    });
+}
+
+/// Like `spawn_call`, for calls that return the created/updated task.
+pub fn spawn_task_call(
+    tx: Sender<TaskResult>,
+    call: impl Future<Output = Result<Task>> + Send + 'static,
+) {
+    tokio::spawn(async move {
+        let result = match call.await {
+            Ok(task) => TaskResult::Task(Box::new(task)),
+            Err(error) => TaskResult::Error(format!("{error:#}")),
+        };
+        let _ = tx.send(result);
+    });
+}
+
+/// Turns a non-2xx response into an error that includes the response body.
+async fn check(response: Response) -> Result<Response> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(response);
+    }
+    let body = response.text().await.unwrap_or_default();
+    let hint = match status {
+        StatusCode::BAD_REQUEST | StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+            "\nThis is most likely an incorrect token. Check your config file."
+        }
+        _ => "",
+    };
+    Err(eyre!("Todoist API error {status}: {body}{hint}"))
+}
+
+async fn send(request: RequestBuilder) -> Result<String> {
+    let response = request.send().await.context("Failed to reach Todoist")?;
+    check(response)
+        .await?
+        .text()
+        .await
+        .context("Failed to read response")
+}
+
+fn next_cursor(page: &serde_json::Value) -> Option<String> {
+    page.get("next_cursor")
         .and_then(|value| value.as_str())
         .map(|value| value.to_string())
 }
 
-pub async fn fetch_projects(client: &Client) -> Result<Vec<projects::Project>> {
-    let mut all_projects: Vec<projects::Project> = Vec::new();
+/// Fetches every page of a list endpoint such as `projects` or `tasks`.
+async fn fetch_all<T: DeserializeOwned>(client: &Client, path: &str) -> Result<Vec<T>> {
+    let mut all = Vec::new();
     let mut cursor: Option<String> = None;
 
     loop {
         let mut request = client
-            .get("https://api.todoist.com/api/v1/projects")
+            .get(format!("{API_URL}/{path}"))
             .query(&[("limit", PAGE_LIMIT)]);
-
-        if let Some(ref cursor) = cursor {
+        if let Some(cursor) = &cursor {
             request = request.query(&[("cursor", cursor)]);
         }
 
-        let response = request
-            .send()
+        let text = send(request)
             .await
-            .context("Failed to send request to fetch projects")?;
+            .wrap_err_with(|| format!("Failed to fetch {path}"))?;
+        let mut page: serde_json::Value =
+            serde_json::from_str(&text).wrap_err_with(|| format!("Failed to parse {path}"))?;
 
-        if response.status().is_client_error() {
-            return Err(color_eyre::eyre::eyre!("Received a 400 error: {:?}. This would most likely be because of an incorrect token. Check your config file for token.", response.status()));
-        }
+        cursor = next_cursor(&page);
+        // Paginated responses wrap the list in `results`.
+        let items = if page.get("results").is_some() {
+            page["results"].take()
+        } else {
+            page
+        };
+        let items: Vec<T> = serde_json::from_value(items)
+            .wrap_err_with(|| format!("Failed to deserialize {path}"))?;
+        all.extend(items);
 
-        let response_text = response
-            .text()
-            .await
-            .context("Failed to read response text")?;
-
-        let parsed_json: serde_json::Value = serde_json::from_str(&response_text)
-            .context("Failed to parse JSON")?;
-        let array_data = parsed_json.get("results").unwrap_or(&parsed_json);
-
-        let serialized: Vec<projects::Project> = serde_json::from_value(array_data.clone())
-            .context("Failed to deserialize response into Vec<Project>")?;
-        all_projects.extend(serialized);
-
-        cursor = next_cursor(&parsed_json);
         if cursor.is_none() {
-            break;
-        }
-    }
-
-    Ok(all_projects)
-}
-
-pub async fn fetch_tasks(
-    client: &reqwest::Client,
-) -> Result<Vec<tasks::Task>, Box<dyn std::error::Error>> {
-    let mut all_tasks: Vec<tasks::Task> = Vec::new();
-    let mut cursor: Option<String> = None;
-
-    loop {
-        let mut request = client
-            .get("https://api.todoist.com/api/v1/tasks")
-            .query(&[("limit", PAGE_LIMIT)]);
-
-        if let Some(ref cursor) = cursor {
-            request = request.query(&[("cursor", cursor)]);
-        }
-
-        let response = request.send().await?.text().await?;
-
-        let parsed_json: serde_json::Value = serde_json::from_str(&response)?;
-        let array_data = parsed_json.get("results").unwrap_or(&parsed_json);
-
-        let serialized: Vec<tasks::Task> = serde_json::from_value(array_data.clone())?;
-        all_tasks.extend(serialized);
-
-        cursor = next_cursor(&parsed_json);
-        if cursor.is_none() {
-            break;
-        }
-    }
-
-    Ok(all_tasks)
-}
-
-pub async fn fetch_sections(
-    client: &reqwest::Client,
-) -> Result<Vec<sections::Section>, Box<dyn std::error::Error>> {
-    let mut all_sections: Vec<sections::Section> = Vec::new();
-    let mut cursor: Option<String> = None;
-
-    loop {
-        let mut request = client
-            .get("https://api.todoist.com/api/v1/sections")
-            .query(&[("limit", PAGE_LIMIT)]);
-
-        if let Some(ref cursor) = cursor {
-            request = request.query(&[("cursor", cursor)]);
-        }
-
-        let response = request.send().await?.text().await?;
-
-        let parsed_json: serde_json::Value = serde_json::from_str(&response)?;
-        let array_data = parsed_json.get("results").unwrap_or(&parsed_json);
-
-        let serialized: Vec<sections::Section> = serde_json::from_value(array_data.clone())?;
-        all_sections.extend(serialized);
-
-        cursor = next_cursor(&parsed_json);
-        if cursor.is_none() {
-            break;
-        }
-    }
-
-    Ok(all_sections)
-}
-
-pub async fn update_task(
-    client: &reqwest::Client,
-    json: serde_json::Value,
-    task_id: String,
-    tx: std::sync::mpsc::Sender<TaskResult>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let response = match client
-        .post(format!("https://api.todoist.com/api/v1/tasks/{}", task_id))
-        .json(&json)
-        .send()
-        .await
-    {
-        Ok(resp) => resp,
-        Err(e) => {
-            let error_msg = format!("Network error: {}", e);
-            tx.send(TaskResult::Error(error_msg)).unwrap();
-            return Err(e.into());
-        }
-    };
-
-    let response_ref = &response;
-
-    match response_ref.error_for_status_ref() {
-        Ok(resp) => resp,
-        Err(e) => {
-            let status_code = e.status().unwrap_or_default();
-            let response_text = response.text().await.unwrap_or_default();
-            let error_msg = format!("API error: {} ({}) \n\n {}", status_code, e, response_text);
-            tx.send(TaskResult::Error(error_msg)).unwrap();
-            return Err(e.into());
-        }
-    };
-
-    let response_text = match response.text().await {
-        Ok(text) => text,
-        Err(e) => {
-            let error_msg = format!("Failed to read response: {}", e);
-            tx.send(TaskResult::Error(error_msg)).unwrap();
-            return Err(e.into());
-        }
-    };
-
-    match serde_json::from_str::<Task>(&response_text) {
-        Ok(serialized) => {
-            tx.send(TaskResult::Task(serialized)).unwrap();
-            Ok(())
-        }
-        Err(e) => {
-            let error_msg = format!(
-                "Failed to parse response: {} (Response was: {})",
-                e, response_text
-            );
-            tx.send(TaskResult::Error(error_msg)).unwrap();
-            Err(e.into())
+            return Ok(all);
         }
     }
 }
 
-pub async fn close_task(
-    client: &reqwest::Client,
-    task_id: String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let url = format!("https://api.todoist.com/api/v1/tasks/{}/close", task_id);
+pub async fn fetch_projects(client: &Client) -> Result<Vec<Project>> {
+    fetch_all(client, "projects").await
+}
 
-    let _response = client.post(url).send().await?;
+pub async fn fetch_tasks(client: &Client) -> Result<Vec<Task>> {
+    fetch_all(client, "tasks").await
+}
 
+pub async fn fetch_sections(client: &Client) -> Result<Vec<Section>> {
+    fetch_all(client, "sections").await
+}
+
+async fn send_for_task(request: RequestBuilder) -> Result<Task> {
+    let text = send(request).await?;
+    serde_json::from_str(&text)
+        .wrap_err_with(|| format!("Failed to parse task (response was: {text})"))
+}
+
+pub async fn create_task(client: &Client, body: serde_json::Value) -> Result<Task> {
+    send_for_task(client.post(format!("{API_URL}/tasks")).json(&body)).await
+}
+
+pub async fn update_task(client: &Client, task_id: &str, body: serde_json::Value) -> Result<Task> {
+    send_for_task(
+        client
+            .post(format!("{API_URL}/tasks/{task_id}"))
+            .json(&body),
+    )
+    .await
+}
+
+pub async fn close_task(client: &Client, task_id: &str) -> Result<()> {
+    send(client.post(format!("{API_URL}/tasks/{task_id}/close"))).await?;
     Ok(())
 }
 
-pub async fn delete_task(
-    client: &reqwest::Client,
-    task_id: String,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let url = format!("https://api.todoist.com/api/v1/tasks/{}", task_id);
-
-    let _response = client.delete(url).send().await?;
-
+pub async fn reopen_task(client: &Client, task_id: &str) -> Result<()> {
+    send(client.post(format!("{API_URL}/tasks/{task_id}/reopen"))).await?;
     Ok(())
 }
 
-pub async fn create_task<'a>(
-    client: &reqwest::Client,
-    json: serde_json::Value,
-    tx: std::sync::mpsc::Sender<TaskResult>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let response = client
-        .post("https://api.todoist.com/api/v1/tasks")
-        .json(&json)
-        .send()
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
-
-    let serialized: Task = serde_json::from_str(&response).unwrap();
-    tx.send(TaskResult::Task(serialized)).unwrap();
+pub async fn delete_task(client: &Client, task_id: &str) -> Result<()> {
+    send(client.delete(format!("{API_URL}/tasks/{task_id}"))).await?;
     Ok(())
 }

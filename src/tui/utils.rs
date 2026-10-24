@@ -1,8 +1,11 @@
-use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike};
-use ratatui::{prelude::*, widgets::ListItem};
+use chrono::{Datelike, Local};
+use ratatui::{
+    prelude::*,
+    widgets::{Block, Borders, ListItem},
+};
 use textwrap::fill;
 
-use crate::tasks::Due;
+use crate::tasks::{Due, Task};
 
 pub fn centered_rect(horizontal: Constraint, vertical: Constraint, r: Rect) -> Rect {
     let popup_layout = match vertical {
@@ -44,73 +47,61 @@ pub fn centered_rect(horizontal: Constraint, vertical: Constraint, r: Rect) -> R
     }
 }
 
-pub fn generate_list_item<'a>(
-    content: &String,
-    due: &Option<Due>,
-    priority: u8,
-    is_completed: bool,
-    children: u16,
-    width: usize,
-) -> ListItem<'a> {
-    let color = match priority {
-        1 => "P4",
-        2 => "P3",
-        3 => "P2",
-        4 => "P1",
-        _ => "",
-    };
-
-    let formatted_due = if let Some(due) = due {
-        if let Some(datetime_str) = &due.datetime {
-            if let Ok(datetime) = NaiveDateTime::parse_from_str(datetime_str, "%Y-%m-%dT%H:%M:%S") {
-                format!(
-                    "(due: {} at {:02}:{:02})",
-                    format_date(datetime.date()),
-                    datetime.hour(),
-                    datetime.minute()
-                )
-            } else {
-                format!("(due: {})", format_date(due.date))
-            }
+/// A bordered input box, highlighted when it is the focused field.
+pub fn field_block(title: &str, active: bool) -> Block<'static> {
+    Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" {title} "))
+        .fg(if active {
+            Color::Indexed(47)
         } else {
-            format!("(due: {})", format_date(due.date))
-        }
-    } else {
-        String::new()
-    };
-
-    let formatted_text = format!(
-        "[{}] {} {} {} - {}",
-        if is_completed { "✓" } else { " " },
-        if children > 0 { "⤷" } else { " " },
-        content,
-        formatted_due,
-        color
-    );
-
-    let wrapped_text = fill(&formatted_text, width);
-
-    ListItem::new(Text::styled(
-        wrapped_text,
-        Style::default().fg(Color::White),
-    ))
+            Color::White
+        })
 }
 
-fn format_date(date: NaiveDate) -> String {
-    let month = match date.month() {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        12 => "Dec",
-        _ => "",
+/// "25 Oct", "25 Oct 2027" when not this year, plus " 17:00" for timed tasks
+/// and " ↻" for recurring ones.
+pub fn format_due(due: &Due) -> String {
+    let format = if due.date.year() == Local::now().year() {
+        "%-d %b"
+    } else {
+        "%-d %b %Y"
     };
-    format!("{:02} {}, {}", date.day(), month, date.year())
+    let mut text = due.date.format(format).to_string();
+    if let Some(time) = due.time {
+        text.push_str(&time.format(" %H:%M").to_string());
+    }
+    if due.is_recurring {
+        text.push_str(" ↻");
+    }
+    text
+}
+
+fn priority_label(priority: u8) -> Option<&'static str> {
+    // The API's priority 4 is the UI's P1; 1 is the default and not shown.
+    match priority {
+        4 => Some("P1"),
+        3 => Some("P2"),
+        2 => Some("P3"),
+        _ => None,
+    }
+}
+
+pub fn generate_list_item<'a>(task: &Task, children: u16, width: usize) -> ListItem<'a> {
+    let mut text = format!(
+        "[ ] {} {}",
+        if children > 0 { "⤷" } else { " " },
+        task.content
+    );
+    if let Some(due) = &task.due {
+        text.push_str(&format!("  ({})", format_due(due)));
+    }
+    if let Some(priority) = priority_label(task.priority) {
+        text.push_str(&format!("  {priority}"));
+    }
+
+    ListItem::new(Text::styled(
+        fill(&text, width.saturating_sub(4)),
+        Style::default().fg(Color::White),
+    ))
 }

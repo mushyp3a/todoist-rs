@@ -29,28 +29,18 @@ pub fn editor(f: &mut Frame, app: &mut App) {
         ])
         .split(inner_area);
 
-    let task_list_width = vertical_split[1].width as usize;
+    let task_list_width = vertical_split[3].width as usize;
 
-    let tasks_block = Block::default()
-        .title(" Sub tasks ")
-        .borders(Borders::ALL)
-        .fg(match app.task_edit.currently_editing {
-            CurrentlyEditing::ChildTasks => Color::Indexed(47),
-            _ => Color::White,
-        });
+    let tasks_block = utils::field_block(
+        "Sub tasks",
+        app.task_edit.currently_editing == CurrentlyEditing::ChildTasks,
+    );
 
     let mut task_list_item = Vec::new();
     for i in &app.task_edit.children {
         let task = &app.tasks.tasks[*i];
-        let children: u16 = *app.tasks.tasks_with_children.get(&task.id).unwrap_or(&0);
-        task_list_item.push(utils::generate_list_item(
-            &task.content,
-            &task.due,
-            task.priority,
-            task.is_completed,
-            children,
-            task_list_width - 4,
-        ))
+        let children = *app.tasks.tasks_with_children.get(&task.id).unwrap_or(&0);
+        task_list_item.push(utils::generate_list_item(task, children, task_list_width))
     }
 
     let task_list = List::new(task_list_item)
@@ -64,33 +54,20 @@ pub fn editor(f: &mut Frame, app: &mut App) {
         .highlight_symbol(">")
         .highlight_spacing(HighlightSpacing::Always);
 
-    app.task_edit
-        .content
-        .set_block(Block::default().borders(Borders::ALL).title(" Task ").fg(
-            match app.task_edit.currently_editing {
-                CurrentlyEditing::Content => Color::Indexed(47),
-                _ => Color::White,
-            },
-        ));
-
-    app.task_edit.description.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Description ")
-            .fg(match app.task_edit.currently_editing {
-                CurrentlyEditing::Description => Color::Indexed(47),
-                _ => Color::White,
-            }),
-    );
-
-    app.task_edit
-        .due_string
-        .set_block(Block::default().borders(Borders::ALL).title(" Due ").fg(
-            match app.task_edit.currently_editing {
-                CurrentlyEditing::DueString => Color::Indexed(47),
-                _ => Color::White,
-            },
-        ));
+    let editing = app.task_edit.currently_editing;
+    let edit = &mut app.task_edit;
+    edit.content.set_block(utils::field_block(
+        "Task",
+        editing == CurrentlyEditing::Content,
+    ));
+    edit.description.set_block(utils::field_block(
+        "Description",
+        editing == CurrentlyEditing::Description,
+    ));
+    edit.due_string.set_block(utils::field_block(
+        "Due",
+        editing == CurrentlyEditing::DueString,
+    ));
 
     let content = &app.task_edit.content;
     let description = &app.task_edit.description;

@@ -24,38 +24,25 @@ pub fn editor(f: &mut Frame, app: &mut App) {
         .constraints(vec![
             Constraint::Length(3),
             Constraint::Length(5),
-            Constraint::Min(1),
+            Constraint::Length(3),
+            Constraint::Min(0),
         ])
         .split(inner_area);
 
-    app.new_task
-        .content
-        .set_block(Block::default().borders(Borders::ALL).title("Task").fg(
-            match app.new_task.currently_editing {
-                CurrentlyEditing::Content => Color::Indexed(47),
-                _ => Color::White,
-            },
-        ));
-
-    app.new_task.description.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Description")
-            .fg(match app.new_task.currently_editing {
-                CurrentlyEditing::Description => Color::Indexed(47),
-                _ => Color::White,
-            }),
-    );
-
-    app.new_task.due_string.set_block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Due String")
-            .fg(match app.new_task.currently_editing {
-                CurrentlyEditing::DueString => Color::Indexed(47),
-                _ => Color::White,
-            }),
-    );
+    let editing = app.new_task.currently_editing;
+    let new_task = &mut app.new_task;
+    new_task.content.set_block(utils::field_block(
+        "Task",
+        editing == CurrentlyEditing::Content,
+    ));
+    new_task.description.set_block(utils::field_block(
+        "Description",
+        editing == CurrentlyEditing::Description,
+    ));
+    new_task.due_string.set_block(utils::field_block(
+        "Due",
+        editing == CurrentlyEditing::DueString,
+    ));
 
     let content = &app.new_task.content;
     let description = &app.new_task.description;

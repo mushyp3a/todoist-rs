@@ -69,7 +69,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         };
 
         list_items.push(ListItem::new(Line::from(Span::styled(
-            format!("{}", project.name),
+            project.name.clone(),
             Style::default().fg(color),
         ))));
     }
@@ -111,15 +111,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     let task_list_width = inner_layout[1].width as usize;
     for i in &app.tasks.display_tasks {
         let task = &app.tasks.tasks[*i];
-        let children: u16 = *app.tasks.tasks_with_children.get(&task.id).unwrap_or(&0);
-        task_list_item.push(utils::generate_list_item(
-            &task.content,
-            &task.due,
-            task.priority,
-            task.is_completed,
-            children,
-            task_list_width - 4,
-        ))
+        let children = *app.tasks.tasks_with_children.get(&task.id).unwrap_or(&0);
+        task_list_item.push(utils::generate_list_item(task, children, task_list_width))
     }
 
     let task_list = List::new(task_list_item)

@@ -54,7 +54,7 @@ impl Projects {
     // }
 
     pub fn next(&mut self) {
-        if self.projects.len() == 0 {
+        if self.projects.is_empty() {
             self.state.select(None);
             return;
         }
@@ -72,7 +72,7 @@ impl Projects {
     }
 
     pub fn previous(&mut self) {
-        if self.projects.len() == 0 {
+        if self.projects.is_empty() {
             self.state.select(None);
             return;
         }

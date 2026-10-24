@@ -24,8 +24,7 @@ impl<'a> TaskEdit<'a> {
         current_task_index: usize,
         currently_editing: CurrentlyEditing,
     ) -> Self {
-        // split with \n
-        let description_lines = description.split('\n').map(|s| s.to_string()).collect::<Vec<String>>();
+        let description_lines = description.split('\n').map(|s| s.to_string()).collect();
 
         let mut task_edit = TaskEdit {
             content: TextArea::from(vec![content]),
@@ -37,14 +36,14 @@ impl<'a> TaskEdit<'a> {
             current_task_index,
         };
 
-        // Automatically update cursor styles
+        set_due_placeholder(&mut task_edit.due_string);
         task_edit.update_cursor_styles();
 
         task_edit
     }
 
     pub fn next(&mut self) {
-        if self.children.len() == 0 {
+        if self.children.is_empty() {
             self.children_list_state.select(None);
             return;
         }
@@ -62,7 +61,7 @@ impl<'a> TaskEdit<'a> {
     }
 
     pub fn previous(&mut self) {
-        if self.children.len() == 0 {
+        if self.children.is_empty() {
             self.children_list_state.select(None);
             return;
         }
@@ -79,28 +78,71 @@ impl<'a> TaskEdit<'a> {
         self.children_list_state.select(Some(i));
     }
 
+    pub fn focus(&mut self, field: CurrentlyEditing) {
+        self.currently_editing = field;
+        self.update_cursor_styles();
+    }
+
     pub fn update_cursor_styles(&mut self) {
-        let active_style = Style::default().add_modifier(Modifier::REVERSED);
-        let default_style = Style::default();
-
-        self.content.set_cursor_style(default_style);
-        self.description.set_cursor_style(default_style);
-        self.due_string.set_cursor_style(default_style);
-
-        match self.currently_editing {
-            CurrentlyEditing::Content => self.content.set_cursor_style(active_style),
-            CurrentlyEditing::Description => self.description.set_cursor_style(active_style),
-            CurrentlyEditing::DueString => self.due_string.set_cursor_style(active_style),
-            CurrentlyEditing::ChildTasks => {}
-        }
+        let active = match self.currently_editing {
+            CurrentlyEditing::Content => Some(0),
+            CurrentlyEditing::Description => Some(1),
+            CurrentlyEditing::DueString => Some(2),
+            CurrentlyEditing::ChildTasks => None,
+        };
+        apply_cursor_styles(
+            [
+                &mut self.content,
+                &mut self.description,
+                &mut self.due_string,
+            ],
+            active,
+        );
     }
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+/// Shows the cursor only in the active field (`active` indexes `fields`).
+pub fn apply_cursor_styles(fields: [&mut TextArea; 3], active: Option<usize>) {
+    for (i, field) in fields.into_iter().enumerate() {
+        let style = if Some(i) == active {
+            Style::default().add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+        field.set_cursor_style(style);
+    }
+}
+
+/// Hints at what the due field accepts; shown while it is empty.
+pub fn set_due_placeholder(due: &mut TextArea) {
+    due.set_placeholder_text("e.g. tomorrow 5pm, every monday, 25 dec");
+}
+
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum CurrentlyEditing {
     #[default]
     Content,
     Description,
     DueString,
     ChildTasks,
+}
+
+impl CurrentlyEditing {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Content => Self::Description,
+            Self::Description => Self::DueString,
+            Self::DueString => Self::ChildTasks,
+            Self::ChildTasks => Self::Content,
+        }
+    }
+
+    pub fn previous(self) -> Self {
+        match self {
+            Self::Content => Self::ChildTasks,
+            Self::Description => Self::Content,
+            Self::DueString => Self::Description,
+            Self::ChildTasks => Self::DueString,
+        }
+    }
 }

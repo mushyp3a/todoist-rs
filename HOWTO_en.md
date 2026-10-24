@@ -13,7 +13,7 @@ These shortcuts and filters can be used anywhere in the application.
   - `o`: View Overdue tasks
   - `a`: View All tasks
   - `p`: Sort tasks by priority
-  - `d`: Sort tasks by date
+  - `s`: Sort tasks by date
 
 ---
 
@@ -25,7 +25,8 @@ Shortcuts available when the Tasks list is focused.
 - `Enter`: Open the Task Editor for the highlighted task
 - `x`: Mark the highlighted task as done (Close task)
 - `d`: Delete the highlighted task
-- `n`: Add a new task to the currently selected project
+- `u`: Undo the last complete or delete (a deleted task is recreated with a new ID, without its sub-tasks)
+- `n`: Add a new task to the selected project (or the highlighted task's project; Inbox if neither)
 
 ---
 
@@ -54,11 +55,12 @@ Used for editing task details or managing sub-tasks.
 ## ➕ New Task Prompt
 Used when creating a new task.
 
-- `Tab`: Cycle through input fields (Content -> Description -> Due Date)
+- `Tab`: Cycle through input fields (Content -> Description -> Due)
 - `Shift + Tab`: Cycle to previous input field (@Syzseisus)
 - `Alt + Enter` or `Ctrl + n`: Insert new line in Description (@Syzseisus)
 - `Esc`: Cancel task creation and close the prompt
-- `Enter`: Submit and create the new task on the server
+- `Enter`: Submit and create the new task on the server (ignored while the task is empty)
+- The Due field takes natural language, e.g. `tomorrow 5pm`, `every monday`, `25 dec`
 
 ---
 

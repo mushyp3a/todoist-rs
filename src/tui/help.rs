@@ -27,14 +27,16 @@ pub fn help(f: &mut Frame) {
             "d",
             "Press d while a task is highlighted to delete the task",
         ]),
+        Row::new(vec!["n", "Add a task to the selected project"]),
         Row::new(vec![
             "+",
             "Press + while on a project to add task to the project",
         ]),
+        Row::new(vec!["u", "Undo the last complete or delete"]),
         Row::new(vec!["o", "Overdue tasks"]),
         Row::new(vec!["a", "All tasks"]),
         Row::new(vec!["p", "Sort by priority"]),
-        Row::new(vec!["d", "Sort by date"]),
+        Row::new(vec!["s", "Sort by date"]),
         Row::new(vec!["Tab", "Switch between projects and tasks"]),
     ];
     let row_count = rows.len();
