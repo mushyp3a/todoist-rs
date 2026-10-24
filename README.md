@@ -17,20 +17,13 @@ See [HOWTO_en.md](HOWTO_en.md) for the full key reference.
 
 ## Installing
 
-1. Install cargo if you haven't done already
-   On Linux and macOS systems, this is done as follows:
-   ```
-   curl https://sh.rustup.rs -sSf | sh
-   ```
-2. Clone this repository
-   ```
-   git clone https://github.com/illiteratewriter/todoist-rs.git
-   ```
-3. Run
-   ```
-   cargo install --path . --locked
-   ```
-   to install _todoist_ to path
+With [Rust](https://rustup.rs) installed:
+
+```
+cargo install --git git@github.com:mushyp3a/todoist-rs.git --locked
+```
+
+Run the same command to update. Make sure `~/.cargo/bin` is on your `PATH`, then start it with `todoist`. On first run it asks for your API token (Todoist → Settings → Integrations → Developer).
 
 ## Project layout
 
