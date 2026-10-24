@@ -24,7 +24,7 @@ sudo dnf install -y rust cargo gcc openssl-devel pkgconf-pkg-config git
 Then:
 
 ```
-cargo install --git git@github.com:mushyp3a/todoist-rs.git --locked
+cargo install --git https://github.com/mushyp3a/todoist-rs.git --locked
 ```
 
 Run the same command to update. Make sure `~/.cargo/bin` is on your `PATH`, then start it with `todoist`. On first run it asks for your API token (Todoist → Settings → Integrations → Developer).
