@@ -1,107 +1,70 @@
-use chrono::{Datelike, Local};
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, ListItem},
+    widgets::{Block, Borders},
 };
-use textwrap::fill;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::tasks::{Due, Task};
+pub const ACCENT: Color = Color::Cyan;
 
-pub fn centered_rect(horizontal: Constraint, vertical: Constraint, r: Rect) -> Rect {
-    let popup_layout = match vertical {
-        Constraint::Percentage(percent_y) => Layout::vertical([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r),
-        Constraint::Length(height) => {
-            let vertical_margin = (r.height.saturating_sub(height)) / 2;
-            Layout::vertical([
-                Constraint::Length(vertical_margin),
-                Constraint::Length(height),
-                Constraint::Length(vertical_margin),
-            ])
-            .split(r)
-        }
-        _ => panic!("Unsupported vertical constraint"),
-    };
+pub fn dim() -> Style {
+    Style::default().add_modifier(Modifier::DIM)
+}
 
-    match horizontal {
-        Constraint::Percentage(percent_x) => Layout::horizontal([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1],
-        Constraint::Length(width) => {
-            let horizontal_margin = (r.width.saturating_sub(width)) / 2;
-            Layout::horizontal([
-                Constraint::Length(horizontal_margin),
-                Constraint::Length(width),
-                Constraint::Length(horizontal_margin),
-            ])
-            .split(popup_layout[1])[1]
-        }
-        _ => panic!("Unsupported horizontal constraint"),
-    }
+pub fn centered_rect(width: Constraint, height: Constraint, area: Rect) -> Rect {
+    let vertical = Layout::vertical([Constraint::Fill(1), height, Constraint::Fill(1)]).split(area);
+    Layout::horizontal([Constraint::Fill(1), width, Constraint::Fill(1)]).split(vertical[1])[1]
 }
 
 /// A bordered input box, highlighted when it is the focused field.
 pub fn field_block(title: &str, active: bool) -> Block<'static> {
+    let color = if active { ACCENT } else { Color::Reset };
     Block::default()
         .borders(Borders::ALL)
+        .border_style(Style::default().fg(color))
         .title(format!(" {title} "))
-        .fg(if active {
-            Color::Indexed(47)
-        } else {
-            Color::White
-        })
 }
 
-/// "25 Oct", "25 Oct 2027" when not this year, plus " 17:00" for timed tasks
-/// and " ↻" for recurring ones.
-pub fn format_due(due: &Due) -> String {
-    let format = if due.date.year() == Local::now().year() {
-        "%-d %b"
-    } else {
-        "%-d %b %Y"
-    };
-    let mut text = due.date.format(format).to_string();
-    if let Some(time) = due.time {
-        text.push_str(&time.format(" %H:%M").to_string());
-    }
-    if due.is_recurring {
-        text.push_str(" ↻");
-    }
-    text
+pub fn text_width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
 }
 
-fn priority_label(priority: u8) -> Option<&'static str> {
-    // The API's priority 4 is the UI's P1; 1 is the default and not shown.
-    match priority {
-        4 => Some("P1"),
-        3 => Some("P2"),
-        2 => Some("P3"),
-        _ => None,
+/// Shortens `text` to at most `max` columns, ending in "…" if cut.
+pub fn truncate(text: &str, max: usize) -> String {
+    if text_width(text) <= max {
+        return text.to_string();
     }
+    let mut out = String::new();
+    let mut width = 0;
+    for c in text.chars() {
+        let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+        if width + char_width + 1 > max {
+            break;
+        }
+        out.push(c);
+        width += char_width;
+    }
+    out.push('…');
+    out
 }
 
-pub fn generate_list_item<'a>(task: &Task, children: u16, width: usize) -> ListItem<'a> {
-    let mut text = format!(
-        "[ ] {} {}",
-        if children > 0 { "⤷" } else { " " },
-        task.content
-    );
-    if let Some(due) = &task.due {
-        text.push_str(&format!("  ({})", format_due(due)));
-    }
-    if let Some(priority) = priority_label(task.priority) {
-        text.push_str(&format!("  {priority}"));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_text_is_untouched() {
+        assert_eq!(truncate("hello", 10), "hello");
     }
 
-    ListItem::new(Text::styled(
-        fill(&text, width.saturating_sub(4)),
-        Style::default().fg(Color::White),
-    ))
+    #[test]
+    fn long_text_is_cut_with_an_ellipsis_within_the_limit() {
+        let cut = truncate("hello world", 6);
+        assert_eq!(cut, "hello…");
+        assert!(text_width(&cut) <= 6);
+    }
+
+    #[test]
+    fn wide_characters_are_counted_by_columns() {
+        assert!(text_width(&truncate("日本語日本語", 7)) <= 7);
+    }
 }

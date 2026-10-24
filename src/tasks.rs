@@ -1,160 +1,5 @@
-use std::collections::HashMap;
-
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
-use ratatui::widgets::ListState;
 use serde::Deserialize;
-
-#[derive(Debug, Default)]
-pub struct Tasks {
-    pub tasks: Vec<Task>,
-    pub filter: Filter,
-    pub state: ListState,
-    pub tasks_with_children: HashMap<String, u16>,
-    pub display_tasks: Vec<usize>,
-}
-
-#[derive(Debug)]
-pub enum SortCriterion {
-    Priority,
-    Date,
-}
-
-impl Tasks {
-    pub fn new(items: Vec<Task>) -> Tasks {
-        Tasks {
-            tasks: items,
-            filter: Filter::Today,
-            state: ListState::default(),
-            tasks_with_children: HashMap::new(),
-            display_tasks: Vec::new(),
-        }
-    }
-
-    pub fn find_tasks_with_children(&mut self) {
-        self.tasks_with_children.clear();
-        for task in &self.tasks {
-            if let Some(parent_id) = &task.parent_id {
-                *self
-                    .tasks_with_children
-                    .entry(parent_id.clone())
-                    .or_insert(0) += 1;
-            }
-        }
-    }
-
-    pub fn sort_tasks(&mut self, criterion: SortCriterion) {
-        match criterion {
-            SortCriterion::Priority => {
-                self.display_tasks.sort_by(|a, b| {
-                    let task_a = &self.tasks[*a];
-                    let task_b = &self.tasks[*b];
-                    task_b.priority.cmp(&task_a.priority)
-                });
-            }
-            SortCriterion::Date => {
-                self.display_tasks.sort_by(|a, b| {
-                    let task_a = &self.tasks[*a];
-                    let task_b = &self.tasks[*b];
-                    match (&task_a.due, &task_b.due) {
-                        (Some(due_a), Some(due_b)) => {
-                            (due_a.date, due_a.time).cmp(&(due_b.date, due_b.time))
-                        }
-                        (Some(_), None) => std::cmp::Ordering::Less,
-                        (None, Some(_)) => std::cmp::Ordering::Greater,
-                        (None, None) => std::cmp::Ordering::Equal,
-                    }
-                });
-            }
-        }
-    }
-
-    pub fn filter_task_list(&mut self) {
-        self.state = ListState::default();
-        self.display_tasks = Vec::new();
-        for (index, task) in self.tasks.iter().enumerate() {
-            if task.parent_id.is_some() {
-                continue;
-            }
-            match &self.filter {
-                Filter::All => {
-                    self.display_tasks.push(index);
-                }
-                Filter::Today => {
-                    let today = Local::now().date_naive();
-                    if let Some(due) = &task.due {
-                        if due.date == today {
-                            self.display_tasks.push(index);
-                        }
-                    }
-                }
-                Filter::ProjectId(project_id) => {
-                    if task.project_id == *project_id {
-                        self.display_tasks.push(index);
-                    }
-                }
-                Filter::Overdue => {
-                    let today = Local::now().date_naive();
-                    if let Some(due) = &task.due {
-                        if due.date < today {
-                            self.display_tasks.push(index);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn next(&mut self) {
-        if self.display_tasks.is_empty() {
-            self.state.select(None);
-            return;
-        }
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.display_tasks.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    pub fn previous(&mut self) {
-        if self.display_tasks.is_empty() {
-            self.state.select(None);
-            return;
-        }
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.display_tasks.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    pub fn unselect(&mut self) {
-        let offset = self.state.offset();
-        self.state.select(None);
-        *self.state.offset_mut() = offset;
-    }
-}
-
-#[derive(Debug, Default)]
-pub enum Filter {
-    #[default]
-    All,
-    Today,
-    Overdue,
-    ProjectId(String),
-}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Task {
@@ -163,17 +8,38 @@ pub struct Task {
     #[serde(default)]
     pub project_id: String,
     pub section_id: Option<String>,
+    pub parent_id: Option<String>,
     #[serde(default)]
     pub content: String,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub labels: Vec<String>,
-    pub parent_id: Option<String>,
+    /// The API's scale: 4 is the highest priority (shown as P1), 1 the default.
     #[serde(default)]
     pub priority: u8,
+    #[serde(default)]
+    pub child_order: i32,
+    #[serde(default)]
+    pub is_collapsed: bool,
     pub due: Option<Due>,
     pub duration: Option<Duration>,
+}
+
+impl Task {
+    /// Priority as the user sees it: 1 (highest) to 4 (default).
+    pub fn ui_priority(&self) -> u8 {
+        5 - self.priority.clamp(1, 4)
+    }
+
+    pub fn is_recurring(&self) -> bool {
+        self.due.as_ref().is_some_and(|due| due.is_recurring)
+    }
+}
+
+/// Converts the user-facing priority (1 = highest) to the API's.
+pub fn api_priority(ui_priority: u8) -> u8 {
+    5 - ui_priority.clamp(1, 4)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -191,6 +57,37 @@ pub struct Due {
     /// Local time of day; only set for tasks due at a specific time.
     pub time: Option<NaiveTime>,
     pub is_recurring: bool,
+}
+
+impl Due {
+    /// A due date set locally, before the server has confirmed it.
+    pub fn local(date: NaiveDate, time: Option<NaiveTime>) -> Due {
+        let mut due = Due {
+            string: String::new(),
+            date,
+            time,
+            is_recurring: false,
+        };
+        due.string = due.api_string();
+        due
+    }
+
+    /// Text that makes the API recreate this due date.
+    pub fn api_string(&self) -> String {
+        if self.is_recurring {
+            return self.string.clone();
+        }
+        match self.time {
+            Some(time) => format!("{} {}", self.date.format("%Y-%m-%d"), time.format("%H:%M")),
+            None => self.date.format("%Y-%m-%d").to_string(),
+        }
+    }
+
+    pub fn same_as(&self, other: &Due) -> bool {
+        self.date == other.date
+            && self.time == other.time
+            && self.is_recurring == other.is_recurring
+    }
 }
 
 #[derive(Deserialize)]
@@ -265,5 +162,20 @@ mod tests {
         let json = r#"{"id":"1","content":"x","due":{"date":"2026-10-25T17:00:00","string":"25 Oct 5:00 PM","is_recurring":false}}"#;
         let task: Task = serde_json::from_str(json).unwrap();
         assert_eq!(task.due.unwrap().time, NaiveTime::from_hms_opt(17, 0, 0));
+    }
+
+    #[test]
+    fn priority_scales_round_trip() {
+        for ui in 1..=4 {
+            assert_eq!(5 - api_priority(ui), ui);
+        }
+    }
+
+    #[test]
+    fn local_due_round_trips_through_api_string() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        let due = Due::local(date, NaiveTime::from_hms_opt(17, 0, 0));
+        assert_eq!(due.api_string(), "2026-11-06 17:00");
+        assert_eq!(Due::local(date, None).api_string(), "2026-11-06");
     }
 }

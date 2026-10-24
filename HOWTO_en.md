@@ -1,68 +1,65 @@
-# Todoist Terminal Client Usage Guide (HOWTO)
+# Todoist Terminal Client Usage Guide
 
-This project is designed to be a keyboard-driven interface for managing your Todoist tasks directly from your terminal. Use the shortcuts below to navigate and manage your tasks efficiently.
+A keyboard-driven Todoist client modelled on Doom Emacs: Vim-style movement, a `SPC` leader key, and a which-key menu. You never need to remember a key. Press a prefix (`SPC`, `g`, `s`, `z`, `d`) and wait a moment, and a menu shows what can follow. `?` shows every binding.
 
-## 🌐 Global Shortcuts
-These shortcuts and filters can be used anywhere in the application.
+## Layout
 
-- `h`: Open / close the help menu
-- `q`: Quit the application
-- `Tab`: Switch focus between the Projects and Tasks panes
-- **Task Filters & Sorting:**
-  - `t`: View Today's tasks
-  - `o`: View Overdue tasks
-  - `a`: View All tasks
-  - `p`: Sort tasks by priority
-  - `s`: Sort tasks by date
+- **Sidebar** (toggle with `SPC t s`): Inbox, Today, Upcoming, All, your project tree and labels, each with a task count.
+- **List**: the tasks of the current view, grouped by section, project or day, with sub-tasks nested below their parent.
+- **Modeline**: mode, view, pending keys and sync state. The line under it shows messages and prompts (the *echo area*). `SPC h m` shows the message log.
 
----
+Today includes overdue tasks, which appear under an "Overdue" heading. Changes you make appear immediately and are sent to Todoist in the background. If Todoist rejects one, it is rolled back and the reason is shown. The list refreshes itself every 30 seconds (`g r` refreshes now) and the cursor stays on the same task.
 
-## 📝 Tasks Pane
-Shortcuts available when the Tasks list is focused.
+## Moving around
 
-- `j` or `↓`: Move to the next task
-- `k` or `↑`: Move to the previous task
-- `Enter`: Open the Task Editor for the highlighted task
-- `x`: Mark the highlighted task as done (Close task)
-- `d`: Delete the highlighted task
-- `u`: Undo the last complete or delete (a deleted task is recreated with a new ID, without its sub-tasks)
-- `n`: Add a new task to the selected project (or the highlighted task's project; Inbox if neither)
+| Keys | Action |
+|---|---|
+| `j` `k`, arrows | next / previous task |
+| `g g` / `G` | top / bottom |
+| `C-d` / `C-u` | half page down / up |
+| `}` / `{` | next / previous section |
+| `h` / `l` | collapse (or go to the sidebar) / expand (or go to the list) |
+| `TAB`, `z a` | toggle fold of sub-tasks (`z o` open, `z c` close, `z R` open all, `z M` close all) |
+| `g t` `g u` `g i` `g a` `g o` | Today, Upcoming, Inbox, All, Overdue |
+| `g p`, `SPC SPC` | fuzzy jump to any view, project or label |
+| `/` | search all tasks as you type (`Enter` keeps it, `Esc` clears it) |
+| `s n` `s d` `s p` | sort: natural, date, priority |
 
----
+## Working with tasks
 
-## 📁 Projects Pane
-Shortcuts available when the Projects list is focused.
+| Keys | Action |
+|---|---|
+| `a` | **quick add** (see below) |
+| `A` | add a sub-task to the highlighted task |
+| `x` | complete |
+| `d d` | delete |
+| `u` | undo the last complete / delete / edit |
+| `1` `2` `3` `4` | set priority |
+| `>` / `<` | postpone a day / move a day earlier |
+| `D` | set the due date (natural language; empty clears it) |
+| `r` | rename |
+| `T` | edit labels |
+| `m` | move to another project (fuzzy picker) |
+| `e`, `RET` | open the full edit panel |
 
-- `j` or `↓`: Move to the next project
-- `k` or `↑`: Move to the previous project
-- `+` or `n`: Add a new task to the highlighted project
+The same commands live under `SPC m` (`SPC m e`, `SPC m d`, …) if you prefer the leader.
 
----
+### Quick add
 
-## ✏️ Task Editor
-Used for editing task details or managing sub-tasks.
+`a` opens a one-line prompt that understands Todoist's quick-add syntax:
 
-- `Tab`: Cycle through input fields (Content -> Description -> Due Date -> Child Tasks)
-- `Shift + Tab`: Cycle to previous input field (@Syzseisus)
-- `Alt + Enter` or `Ctrl + n`: Insert new line in Description (@Syzseisus)
-- `Esc`: Cancel changes and close the editor
-- `Enter`: Save changes to the server and close. (If a child task is highlighted, it opens that child task instead)
-- `n` (when Child Tasks list is focused): Create a new sub-task for the current task
-- Use `j`, `k`, `↓`, `↑` to navigate the child tasks list.
+```
+buy milk tomorrow 5pm p1 #shopping @errands
+```
 
----
+Dates (`tomorrow`, `every monday`, `25 dec`), priority (`p1`–`p4`), project (`#project`) and existing labels (`@label`) are parsed by Todoist. Without `#project`, the task goes to the project you are viewing, or the Inbox. In the Today view it is due today, and in a label view it gets that label.
 
-## ➕ New Task Prompt
-Used when creating a new task.
+### Edit panel
 
-- `Tab`: Cycle through input fields (Content -> Description -> Due)
-- `Shift + Tab`: Cycle to previous input field (@Syzseisus)
-- `Alt + Enter` or `Ctrl + n`: Insert new line in Description (@Syzseisus)
-- `Esc`: Cancel task creation and close the prompt
-- `Enter`: Submit and create the new task on the server (ignored while the task is empty)
-- The Due field takes natural language, e.g. `tomorrow 5pm`, `every monday`, `25 dec`
+`Tab` / `Shift+Tab` move between Task, Description, Due, Labels and Priority. `Enter` saves (in the description it inserts a new line). `C-c C-c` or `C-s` saves from anywhere, `C-c C-k` aborts, and `Esc` cancels (asking first if you changed something).
 
----
+## Limitations
 
-## Contributors
-This guide was authored and updated by @syzseisus.
+- Undoing a delete recreates the task with a new ID, without its sub-tasks or comments.
+- Completing a recurring task schedules its next occurrence and can't be undone. `>` and `<` don't work on recurring tasks, so use `D` to edit the schedule.
+- Quick add only recognises labels that already exist; an unknown `@label` stays in the task text.

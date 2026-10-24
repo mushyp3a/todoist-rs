@@ -1,11 +1,14 @@
 use std::future::Future;
-use std::sync::mpsc::Sender;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    mpsc::Sender,
+};
 
 use color_eyre::eyre::{eyre, Context, Result};
 use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
 
-use crate::{projects::Project, sections::Section, tasks::Task, TaskResult};
+use crate::{app::Msg, projects::Project, sections::Section, tasks::Task};
 
 const API_URL: &str = "https://api.todoist.com/api/v1";
 
@@ -13,26 +16,37 @@ const API_URL: &str = "https://api.todoist.com/api/v1";
 // empty result set instead of an error.
 const PAGE_LIMIT: u32 = 200;
 
-/// Runs an API call in the background; a failure is shown in the error modal.
-pub fn spawn_call(tx: Sender<TaskResult>, call: impl Future<Output = Result<()>> + Send + 'static) {
-    tokio::spawn(async move {
-        if let Err(error) = call.await {
-            let _ = tx.send(TaskResult::Error(format!("{error:#}")));
-        }
-    });
+static PENDING: AtomicUsize = AtomicUsize::new(0);
+
+/// How many background requests are in flight.
+pub fn pending() -> usize {
+    PENDING.load(Ordering::Relaxed)
 }
 
-/// Like `spawn_call`, for calls that return the created/updated task.
-pub fn spawn_task_call(
-    tx: Sender<TaskResult>,
-    call: impl Future<Output = Result<Task>> + Send + 'static,
+/// Runs an API call in the background and reports the outcome as a `Msg`.
+///
+/// `restore` is put back into the list if the call fails, undoing the
+/// optimistic local change; `note` is shown when it succeeds.
+pub fn spawn_op(
+    tx: Sender<Msg>,
+    restore: Option<Task>,
+    note: Option<String>,
+    call: impl Future<Output = Result<Option<Task>>> + Send + 'static,
 ) {
+    PENDING.fetch_add(1, Ordering::Relaxed);
     tokio::spawn(async move {
-        let result = match call.await {
-            Ok(task) => TaskResult::Task(Box::new(task)),
-            Err(error) => TaskResult::Error(format!("{error:#}")),
+        let outcome = call.await;
+        PENDING.fetch_sub(1, Ordering::Relaxed);
+        let _ = match outcome {
+            Ok(task) => tx.send(Msg::Done {
+                task: task.map(Box::new),
+                note,
+            }),
+            Err(error) => tx.send(Msg::Failed {
+                error: format!("{error:#}"),
+                restore: restore.map(Box::new),
+            }),
         };
-        let _ = tx.send(result);
     });
 }
 
@@ -147,4 +161,36 @@ pub async fn reopen_task(client: &Client, task_id: &str) -> Result<()> {
 pub async fn delete_task(client: &Client, task_id: &str) -> Result<()> {
     send(client.delete(format!("{API_URL}/tasks/{task_id}"))).await?;
     Ok(())
+}
+
+pub async fn fetch_task(client: &Client, task_id: &str) -> Result<Task> {
+    send_for_task(client.get(format!("{API_URL}/tasks/{task_id}"))).await
+}
+
+/// Creates a task from Todoist's quick-add syntax: `buy milk tomorrow p1 #shopping @errands`.
+pub async fn quick_add(client: &Client, text: &str) -> Result<Task> {
+    send_for_task(
+        client
+            .post(format!("{API_URL}/tasks/quick"))
+            .json(&serde_json::json!({ "text": text })),
+    )
+    .await
+}
+
+pub enum MoveTarget {
+    Project(String),
+    Parent(String),
+}
+
+pub async fn move_task(client: &Client, task_id: &str, target: MoveTarget) -> Result<Task> {
+    let body = match target {
+        MoveTarget::Project(id) => serde_json::json!({ "project_id": id }),
+        MoveTarget::Parent(id) => serde_json::json!({ "parent_id": id }),
+    };
+    send_for_task(
+        client
+            .post(format!("{API_URL}/tasks/{task_id}/move"))
+            .json(&body),
+    )
+    .await
 }

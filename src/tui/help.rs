@@ -1,61 +1,128 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Clear, Row, Table},
+    widgets::{Block, Borders, Clear, Paragraph},
 };
 
-use crate::tui::utils;
+use super::utils::{dim, ACCENT};
+use crate::{
+    app::Level,
+    keymap::{Action, BINDINGS},
+};
 
-pub fn help(f: &mut Frame) {
-    let close_help = Line::from(vec![
-        " To close, press ".into(),
-        "h".blue().bold(),
-        " again ".into(),
-    ]);
-    let block = Block::default()
-        .title(" Help ")
-        .title_bottom(close_help.centered())
-        .borders(Borders::ALL);
+struct Entry {
+    keys: Vec<&'static str>,
+    description: &'static str,
+    action: Action,
+}
 
-    let rows = [
-        Row::new(vec!["t", "Today's tasks"]),
-        Row::new(vec!["q", "Quit"]),
-        Row::new(vec![
-            "x",
-            "Press x while a task is highlighted to mark as done",
-        ]),
-        Row::new(vec![
-            "d",
-            "Press d while a task is highlighted to delete the task",
-        ]),
-        Row::new(vec!["n", "Add a task to the selected project"]),
-        Row::new(vec![
-            "+",
-            "Press + while on a project to add task to the project",
-        ]),
-        Row::new(vec!["u", "Undo the last complete or delete"]),
-        Row::new(vec!["o", "Overdue tasks"]),
-        Row::new(vec!["a", "All tasks"]),
-        Row::new(vec!["p", "Sort by priority"]),
-        Row::new(vec!["s", "Sort by date"]),
-        Row::new(vec!["Tab", "Switch between projects and tasks"]),
+/// Bindings under `prefix`, with keys that do the same thing merged ("j, down").
+fn section(title: &'static str, belongs: impl Fn(&str) -> bool) -> Vec<Line<'static>> {
+    let mut entries: Vec<Entry> = Vec::new();
+    for (sequence, description, action) in BINDINGS.iter().filter(|(s, _, _)| belongs(s)) {
+        match entries
+            .iter_mut()
+            .find(|entry| entry.action == *action && entry.description == *description)
+        {
+            Some(entry) => entry.keys.push(sequence),
+            None => entries.push(Entry {
+                keys: vec![sequence],
+                description,
+                action: *action,
+            }),
+        }
+    }
+
+    let mut lines = vec![
+        Line::default(),
+        Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        )),
     ];
-    let row_count = rows.len();
-    let total_height = row_count + 5;
+    for entry in entries {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("  {:<16}", entry.keys.join(", ")),
+                Style::default().fg(ACCENT),
+            ),
+            Span::raw(entry.description),
+        ]));
+    }
+    lines
+}
 
-    let widths = [Constraint::Percentage(50), Constraint::Percentage(50)];
-    let table = Table::new(rows, widths)
-        .header(
-            Row::new(vec!["Shortcut", "Functionality"])
-                .style(Style::new().bold())
-                .bottom_margin(1),
-        )
-        .block(block);
+pub fn help(f: &mut Frame, scroll: u16) {
+    let mut lines = vec![Line::from(Span::styled(
+        "Press SPC (or g, s, z) and wait: a menu shows what comes next.",
+        dim(),
+    ))];
+    lines.extend(section("Normal mode", |s| !s.starts_with("SPC")));
+    lines.extend(section("Leader: SPC", |s| {
+        s.starts_with("SPC") && !s.starts_with("SPC m")
+    }));
+    lines.extend(section("Task commands: SPC m", |s| s.starts_with("SPC m")));
+    lines.push(Line::default());
+    lines.push(Line::from(Span::styled(
+        "Edit panel",
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+    )));
+    for (keys, text) in [
+        ("C-c C-c, C-s", "save"),
+        ("Esc, C-c C-k", "cancel"),
+        ("Tab, S-Tab", "next / previous field"),
+        ("Enter", "save (new line in the description)"),
+    ] {
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {keys:<16}"), Style::default().fg(ACCENT)),
+            Span::raw(text),
+        ]));
+    }
 
-    let area = utils::centered_rect(
-        Constraint::Percentage(60),
-        Constraint::Length(total_height as u16),
-        f.area(),
-    );
+    let area = f.area().inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
     f.render_widget(Clear, area);
-    f.render_widget(table, area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Help ")
+        .title_bottom(Line::from(" j/k scroll · q close ").centered());
+    f.render_widget(Paragraph::new(lines).block(block).scroll((scroll, 0)), area);
+}
+
+pub fn messages(f: &mut Frame, log: &[(Level, String)], scroll: u16) {
+    let lines: Vec<Line> = if log.is_empty() {
+        vec![Line::from(Span::styled("No messages yet.", dim()))]
+    } else {
+        log.iter()
+            .rev()
+            .map(|(level, text)| {
+                let style = match level {
+                    Level::Error => Style::default().fg(Color::Red),
+                    Level::Info => Style::default(),
+                };
+                Line::from(Span::styled(text.clone(), style))
+            })
+            .collect()
+    };
+    let area = f.area().inner(Margin {
+        horizontal: 2,
+        vertical: 1,
+    });
+    f.render_widget(Clear, area);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Messages (newest first) ")
+        .title_bottom(Line::from(" j/k scroll · q close ").centered());
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(block)
+            .wrap(ratatui::widgets::Wrap { trim: false })
+            .scroll((scroll, 0)),
+        area,
+    );
 }

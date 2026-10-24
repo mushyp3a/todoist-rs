@@ -1,22 +1,11 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Section {
     pub id: String,
     pub project_id: String,
     #[serde(default)]
-    pub order: i32,
-    #[serde(default)]
     pub name: String,
-}
-
-#[derive(Debug, Default)]
-pub struct Sections {
-    pub sections: Vec<Section>,
-}
-
-impl Sections {
-    pub fn new(items: Vec<Section>) -> Sections {
-        Sections { sections: items }
-    }
+    #[serde(default)]
+    pub section_order: i32,
 }

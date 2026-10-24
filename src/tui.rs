@@ -1,18 +1,17 @@
 use std::io::{self, stdout, Stdout};
 
 use crossterm::{execute, terminal::*};
-use ratatui::{
-    prelude::*,
-    widgets::{Block, Borders, HighlightSpacing, List, ListItem, Paragraph},
-};
+use ratatui::prelude::*;
 
-mod error;
+mod bars;
 mod help;
-mod new_task;
-mod task_editor;
+mod list;
+mod popups;
+mod sidebar;
 mod utils;
+mod whichkey;
 
-use crate::{tasks::Filter, App, CurrentFocus};
+use crate::app::{App, Mode, Overlay};
 
 pub type Tui = Terminal<CrosstermBackend<Stdout>>;
 
@@ -22,126 +21,40 @@ pub fn init() -> io::Result<Tui> {
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 
-pub fn restore() -> std::io::Result<()> {
+pub fn restore() -> io::Result<()> {
     execute!(stdout(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
     Ok(())
 }
 
 pub fn ui(f: &mut Frame, app: &mut App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(1),
-            Constraint::Length(3),
-        ])
-        .split(f.area());
+    let [main, modeline, echo] = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(f.area());
 
-    let inner_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)])
-        .split(chunks[1]);
-
-    let title_block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default());
-
-    let title = Paragraph::new(Text::styled(
-        "Todoist",
-        Style::default().fg(Color::Indexed(47)),
-    ))
-    .block(title_block);
-
-    f.render_widget(title, chunks[0]);
-
-    let mut list_items = Vec::<ListItem>::new();
-
-    for project in &app.projects.projects {
-        let color = if let Some(selected_project) = &app.projects.selected_project {
-            if project.id == *selected_project {
-                Color::Indexed(214)
-            } else {
-                Color::Yellow
-            }
-        } else {
-            Color::Yellow
-        };
-
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            project.name.clone(),
-            Style::default().fg(color),
-        ))));
+    // The sidebar gives way on narrow terminals.
+    if app.show_sidebar && main.width >= 60 {
+        let [sidebar_area, list_area] =
+            Layout::horizontal([Constraint::Length(26), Constraint::Min(1)]).areas(main);
+        sidebar::render(f, sidebar_area, app);
+        list::render(f, list_area, app);
+    } else {
+        list::render(f, main, app);
     }
 
-    let my_projects_block = Block::default()
-        .title(" My projects ".bold())
-        .borders(Borders::ALL)
-        .fg(match app.current_focus {
-            CurrentFocus::Projects => Color::Indexed(47),
-            _ => Color::White,
-        });
+    bars::modeline(f, modeline, app);
+    bars::echo_area(f, echo, app);
 
-    let list = List::new(list_items)
-        .block(my_projects_block)
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-        .highlight_symbol(">")
-        .highlight_spacing(HighlightSpacing::Always);
-    f.render_stateful_widget(list, inner_layout[0], &mut app.projects.state);
-
-    let task_title = match app.tasks.filter {
-        Filter::All => " All ",
-        Filter::Today => " Today ",
-        Filter::ProjectId(_) => " Tasks ",
-        Filter::Overdue => " Overdue ",
-    };
-
-    let instructions = Line::from(vec![" For help, press ".into(), "h ".blue().bold()]);
-
-    let tasks_block = Block::default()
-        .title(task_title.bold())
-        .title_bottom(instructions.centered())
-        .borders(Borders::ALL)
-        .fg(match app.current_focus {
-            CurrentFocus::Tasks => Color::Indexed(47),
-            _ => Color::White,
-        });
-
-    let mut task_list_item = Vec::new();
-    let task_list_width = inner_layout[1].width as usize;
-    for i in &app.tasks.display_tasks {
-        let task = &app.tasks.tasks[*i];
-        let children = *app.tasks.tasks_with_children.get(&task.id).unwrap_or(&0);
-        task_list_item.push(utils::generate_list_item(task, children, task_list_width))
+    match &mut app.mode {
+        Mode::Edit(edit) => popups::edit(f, edit),
+        Mode::Picker(picker) => popups::picker(f, picker),
+        Mode::Overlay(Overlay::Help) => help::help(f, app.overlay_scroll),
+        Mode::Overlay(Overlay::Messages) => help::messages(f, &app.log, app.overlay_scroll),
+        Mode::Normal | Mode::Prompt(_) => {}
     }
 
-    let task_list = List::new(task_list_item)
-        .block(tasks_block)
-        .highlight_style(
-            Style::default()
-                .add_modifier(Modifier::BOLD)
-                .add_modifier(Modifier::REVERSED)
-                .fg(Color::Cyan),
-        )
-        .highlight_symbol(">")
-        .highlight_spacing(HighlightSpacing::Always);
-
-    f.render_stateful_widget(task_list, inner_layout[1], &mut app.tasks.state);
-
-    // help popup
-    if app.show_help {
-        help::help(f);
-    }
-
-    if app.show_task_editor {
-        task_editor::editor(f, app)
-    }
-
-    if app.show_new_task {
-        new_task::editor(f, app)
-    }
-
-    if app.show_error {
-        error::render_error_modal(f, app);
-    }
+    whichkey::render(f, main, app);
 }
