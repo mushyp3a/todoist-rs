@@ -1,8 +1,6 @@
 # Todoist Terminal Client
 
-This is a terminal client for Todoist, (inspired by Spotify-TUI). The project is designed to be a keyboard-driven interface for managing your Todoist tasks directly from your terminal.
-
-  <img src="imgs/app.gif" width="75%">
+A keyboard-driven Todoist client for the terminal, with Doom Emacs-style keys: Vim movement, a `SPC` leader and a which-key menu.
 
 ## Features
 
@@ -17,7 +15,13 @@ See [HOWTO_en.md](HOWTO_en.md) for the full key reference.
 
 ## Installing
 
-With [Rust](https://rustup.rs) installed:
+On Fedora, install the prerequisites (Rust, a C compiler, OpenSSL headers, git):
+
+```
+sudo dnf install -y rust cargo gcc openssl-devel pkgconf-pkg-config git
+```
+
+Then:
 
 ```
 cargo install --git git@github.com:mushyp3a/todoist-rs.git --locked
@@ -41,10 +45,8 @@ Run the same command to update. Make sure `~/.cargo/bin` is on your `PATH`, then
 
 Before committing: `cargo fmt && cargo clippy --all-targets && cargo test`.
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request.
-
 ## Disclaimer
 
 This project is a personal project and is not affiliated with, maintained, authorized, endorsed or sponsored by the Todoist company or any of its affiliates.
+
+Based on [illiteratewriter/todoist-rs](https://github.com/illiteratewriter/todoist-rs) (MIT licensed, see `LICENSE`).
