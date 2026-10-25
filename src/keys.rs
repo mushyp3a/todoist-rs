@@ -9,6 +9,7 @@ use crate::{
     keymap::{self, Lookup},
     picker::Picker,
     prompt::{Prompt, PromptKind},
+    quick_add,
     task_edit::{Field, TaskEdit},
 };
 
@@ -62,7 +63,37 @@ fn normal_key(app: &mut App, key: KeyEvent) {
 
 fn prompt_key(app: &mut App, mut prompt: Prompt, key: KeyEvent) {
     let searching = matches!(prompt.kind, PromptKind::Search);
-    if key.code == KeyCode::Esc || is_ctrl(&key, 'g') {
+    let adding = matches!(prompt.kind, PromptKind::Add { .. });
+    let cancel = key.code == KeyCode::Esc || is_ctrl(&key, 'g');
+
+    let text = prompt.text();
+    if let Some(suggest) = prompt.suggest.as_mut() {
+        if cancel {
+            // The first Esc only closes the suggestions.
+            prompt.suggest = None;
+            app.mode = Mode::Prompt(prompt);
+            return;
+        }
+        if key.code == KeyCode::Down || is_ctrl(&key, 'n') || is_ctrl(&key, 'j') {
+            suggest.step(1);
+            app.mode = Mode::Prompt(prompt);
+            return;
+        }
+        if key.code == KeyCode::Up || is_ctrl(&key, 'p') || is_ctrl(&key, 'k') {
+            suggest.step(-1);
+            app.mode = Mode::Prompt(prompt);
+            return;
+        }
+        if key.code == KeyCode::Tab || key.code == KeyCode::Enter {
+            let (text, cursor) = suggest.accept(&text);
+            prompt.set_text(&text, cursor);
+            prompt.suggest = None;
+            app.mode = Mode::Prompt(prompt);
+            return;
+        }
+    }
+
+    if cancel {
         if searching {
             app.search.clear();
             app.rebuild();
@@ -79,6 +110,20 @@ fn prompt_key(app: &mut App, mut prompt: Prompt, key: KeyEvent) {
         // Filter as you type.
         app.search = prompt.text();
         app.rebuild();
+    }
+    if adding {
+        let projects: Vec<&str> = app
+            .store
+            .projects
+            .iter()
+            .map(|project| project.name.as_str())
+            .collect();
+        prompt.suggest = quick_add::suggest(
+            &prompt.text(),
+            prompt.cursor(),
+            &projects,
+            &app.store.labels(),
+        );
     }
     app.mode = Mode::Prompt(prompt);
 }

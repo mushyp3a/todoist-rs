@@ -1,5 +1,7 @@
 use tui_textarea::{CursorMove, TextArea};
 
+use crate::quick_add::Suggestions;
+
 /// What a one-line prompt in the echo area will do when submitted.
 #[derive(Debug, Clone)]
 pub enum PromptKind {
@@ -16,6 +18,8 @@ pub enum PromptKind {
 pub struct Prompt {
     pub kind: PromptKind,
     pub input: TextArea<'static>,
+    /// Completions for the `#`/`@` word under the cursor (quick add only).
+    pub suggest: Option<Suggestions>,
 }
 
 impl Prompt {
@@ -24,7 +28,24 @@ impl Prompt {
         input.move_cursor(CursorMove::End);
         // The cursor is drawn by the terminal, not as a highlighted cell.
         input.set_cursor_line_style(ratatui::style::Style::default());
-        Prompt { kind, input }
+        Prompt {
+            kind,
+            input,
+            suggest: None,
+        }
+    }
+
+    /// The cursor's position in chars.
+    pub fn cursor(&self) -> usize {
+        self.input.cursor().1
+    }
+
+    /// Replaces the text and puts the cursor at `cursor` chars.
+    pub fn set_text(&mut self, text: &str, cursor: usize) {
+        let mut input = TextArea::new(vec![text.to_string()]);
+        input.move_cursor(CursorMove::Jump(0, cursor as u16));
+        input.set_cursor_line_style(ratatui::style::Style::default());
+        self.input = input;
     }
 
     pub fn label(&self) -> &'static str {

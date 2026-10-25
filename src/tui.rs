@@ -53,7 +53,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         Mode::Picker(picker) => popups::picker(f, picker),
         Mode::Overlay(Overlay::Help) => help::help(f, app.overlay_scroll),
         Mode::Overlay(Overlay::Messages) => help::messages(f, &app.log, app.overlay_scroll),
-        Mode::Normal | Mode::Prompt(_) => {}
+        Mode::Prompt(prompt) => {
+            if let Some(suggest) = &prompt.suggest {
+                popups::suggestions(f, echo, prompt.label(), suggest);
+            }
+        }
+        Mode::Normal => {}
     }
 
     whichkey::render(f, main, app);

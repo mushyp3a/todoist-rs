@@ -1,11 +1,12 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
-use super::utils::{centered_rect, dim, field_block, ACCENT};
+use super::utils::{centered_rect, dim, field_block, text_width, truncate, ACCENT};
 use crate::{
     picker::Picker,
+    quick_add::Suggestions,
     task_edit::{Field, TaskEdit},
 };
 
@@ -131,6 +132,38 @@ pub fn picker(f: &mut Frame, picker: &mut Picker) {
     f.render_stateful_widget(
         List::new(items).highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
         list_area,
+        &mut state,
+    );
+}
+
+/// Completions listed just above the prompt line.
+pub fn suggestions(f: &mut Frame, echo: Rect, label: &str, suggest: &Suggestions) {
+    let widest = suggest.items.iter().map(|item| text_width(item)).max().unwrap_or(0);
+    let width = (widest + 4).min(echo.width as usize) as u16;
+    let height = (suggest.items.len() as u16).min(echo.y);
+    let area = Rect {
+        x: (echo.x + text_width(label) as u16).min(echo.right().saturating_sub(width)),
+        y: echo.y - height,
+        width,
+        height,
+    };
+    f.render_widget(Clear, area);
+
+    let items: Vec<ListItem> = suggest
+        .items
+        .iter()
+        .map(|item| {
+            ListItem::new(Line::from(vec![
+                Span::styled(format!(" {}", suggest.sigil), dim()),
+                Span::raw(truncate(item, width.saturating_sub(3) as usize)),
+            ]))
+        })
+        .collect();
+    let mut state = ListState::default();
+    state.select(Some(suggest.selected));
+    f.render_stateful_widget(
+        List::new(items).highlight_style(Style::default().add_modifier(Modifier::REVERSED)),
+        area,
         &mut state,
     );
 }

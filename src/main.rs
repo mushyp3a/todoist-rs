@@ -16,6 +16,7 @@ mod keys;
 mod picker;
 mod projects;
 mod prompt;
+mod quick_add;
 mod sections;
 mod store;
 mod task_edit;

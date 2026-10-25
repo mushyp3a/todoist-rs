@@ -4,7 +4,8 @@ use super::utils::{dim, text_width};
 use crate::{
     api_calls,
     app::{App, Level, Mode, Overlay},
-    prompt::PromptKind,
+    prompt::{Prompt, PromptKind},
+    quick_add::{tokenize, TokenKind},
 };
 
 const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
@@ -95,7 +96,11 @@ pub fn echo_area(f: &mut Frame, area: Rect, app: &mut App) {
             )),
             label_area,
         );
-        f.render_widget(&prompt.input, input_area);
+        if matches!(prompt.kind, PromptKind::Add { .. }) {
+            highlighted_input(f, input_area, prompt);
+        } else {
+            f.render_widget(&prompt.input, input_area);
+        }
         return;
     }
 
@@ -117,4 +122,42 @@ pub fn echo_area(f: &mut Frame, area: Rect, app: &mut App) {
         None => Line::default(),
     };
     f.render_widget(Paragraph::new(line), area);
+}
+
+/// Quick-add input with the parts Todoist will recognise coloured.
+fn highlighted_input(f: &mut Frame, area: Rect, prompt: &Prompt) {
+    let line = prompt.text();
+    let mut spans = Vec::new();
+    let mut at = 0;
+    for (range, kind) in tokenize(&line) {
+        if range.start > at {
+            spans.push(Span::raw(line[at..range.start].to_string()));
+        }
+        spans.push(Span::styled(line[range.clone()].to_string(), token_style(kind)));
+        at = range.end;
+    }
+    spans.push(Span::raw(line[at..].to_string()));
+
+    // Scroll sideways so the cursor stays in view.
+    let before: String = line.chars().take(prompt.cursor()).collect();
+    let cursor_x = text_width(&before);
+    let scroll = (cursor_x + 1).saturating_sub(area.width as usize);
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).scroll((0, scroll as u16)),
+        area,
+    );
+    f.set_cursor_position((area.x + (cursor_x - scroll) as u16, area.y));
+}
+
+fn token_style(kind: TokenKind) -> Style {
+    let color = match kind {
+        TokenKind::Due => Color::Green,
+        TokenKind::Priority(1) => Color::Red,
+        TokenKind::Priority(2) => Color::Yellow,
+        TokenKind::Priority(3) => Color::Blue,
+        TokenKind::Priority(_) => Color::Gray,
+        TokenKind::Project => Color::Magenta,
+        TokenKind::Label => Color::Cyan,
+    };
+    Style::default().fg(color).add_modifier(Modifier::BOLD)
 }
