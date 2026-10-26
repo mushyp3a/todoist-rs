@@ -63,23 +63,42 @@ pub fn help(f: &mut Frame, scroll: u16) {
         s.starts_with("SPC") && !s.starts_with("SPC m")
     }));
     lines.extend(section("Task commands: SPC m", |s| s.starts_with("SPC m")));
-    lines.push(Line::default());
-    lines.push(Line::from(Span::styled(
-        "Edit panel",
-        Style::default()
-            .fg(Color::Magenta)
-            .add_modifier(Modifier::BOLD),
-    )));
-    for (keys, text) in [
-        ("C-c C-c, C-s", "save"),
-        ("Esc, C-c C-k", "cancel"),
-        ("Tab, S-Tab", "next / previous field"),
-        ("Enter", "save (new line in the description)"),
-    ] {
-        lines.push(Line::from(vec![
-            Span::styled(format!("  {keys:<16}"), Style::default().fg(ACCENT)),
-            Span::raw(text),
-        ]));
+    let panels: [(&str, &[(&str, &str)]); 2] = [
+        (
+            "Edit panel",
+            &[
+                ("C-c C-c, C-s", "save"),
+                ("Esc, C-c C-k", "cancel"),
+                ("Tab, S-Tab", "next / previous field"),
+                ("Enter", "save (new line in the description)"),
+            ],
+        ),
+        (
+            "Reschedule popup",
+            &[
+                ("C-h / C-l", "previous / next day"),
+                ("C-k / C-j", "previous / next week"),
+                ("H / L, C-p / C-n", "previous / next month"),
+                ("Enter", "set the highlighted date"),
+                ("t m w n s x", "today, tomorrow, Monday, +1 week, weekend, no date"),
+                ("Esc, C-g", "cancel"),
+            ],
+        ),
+    ];
+    for (title, rows) in panels {
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        )));
+        for (keys, text) in rows {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {keys:<18}"), Style::default().fg(ACCENT)),
+                Span::raw(*text),
+            ]));
+        }
     }
 
     let area = f.area().inner(Margin {

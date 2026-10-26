@@ -13,6 +13,7 @@ use crate::{
     picker::Picker,
     projects::Project,
     prompt::Prompt,
+    reschedule::Reschedule,
     sections::Section,
     store::Store,
     task_edit::TaskEdit,
@@ -62,6 +63,7 @@ pub enum Mode {
     Prompt(Prompt),
     Picker(Picker),
     Edit(Box<TaskEdit>),
+    Reschedule(Box<Reschedule>),
     Overlay(Overlay),
 }
 

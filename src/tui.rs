@@ -51,6 +51,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     match &mut app.mode {
         Mode::Edit(edit) => popups::edit(f, edit),
         Mode::Picker(picker) => popups::picker(f, picker),
+        Mode::Reschedule(reschedule) => popups::reschedule(f, reschedule),
         Mode::Overlay(Overlay::Help) => help::help(f, app.overlay_scroll),
         Mode::Overlay(Overlay::Messages) => help::messages(f, &app.log, app.overlay_scroll),
         Mode::Prompt(prompt) => {

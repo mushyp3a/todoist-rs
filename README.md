@@ -7,7 +7,7 @@ A keyboard-driven Todoist client for the terminal, with Doom Emacs-style keys: V
 - Doom Emacs-style keys: Vim movement, a `SPC` leader and a which-key menu, so every binding is discoverable (`?` lists them all)
 - Views for Inbox, Today (with overdue), Upcoming, All, projects (as a tree, with sections) and labels
 - Quick add with Todoist's natural-language syntax: `buy milk tomorrow 5pm p1 #shopping @errands`
-- Single-key edits: complete, delete, undo, priority, postpone, due date, rename, labels, move
+- Single-key edits: complete, delete, undo, priority, postpone, reschedule (presets + calendar popup), due date, rename, labels, move
 - Nested, foldable sub-tasks; search; fuzzy jump to any project or label
 - Instant, optimistic updates with rollback on failure, and automatic background refresh
 
@@ -39,7 +39,7 @@ Run the same command to update. Make sure `~/.cargo/bin` is on your `PATH`, then
 - `view.rs`: which tasks a view contains and how they are laid out as rows
 - `api_calls.rs`: all Todoist API v1 requests; failures are reported back to the UI
 - `store.rs`, `tasks.rs`, `projects.rs`, `sections.rs`: data (`tasks.rs` also parses due dates)
-- `prompt.rs`, `picker.rs`, `task_edit.rs`: state of the prompt, fuzzy picker and edit panel
+- `prompt.rs`, `picker.rs`, `task_edit.rs`, `reschedule.rs`: state of the prompt, fuzzy picker, edit panel and reschedule calendar
 - `tui.rs`, `tui/`: rendering
 - `config.rs`: API token storage
 

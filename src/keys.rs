@@ -10,6 +10,7 @@ use crate::{
     picker::Picker,
     prompt::{Prompt, PromptKind},
     quick_add,
+    reschedule::{self, Reschedule},
     task_edit::{Field, TaskEdit},
 };
 
@@ -21,6 +22,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         Mode::Prompt(prompt) => prompt_key(app, prompt, key),
         Mode::Picker(picker) => picker_key(app, picker, key),
         Mode::Edit(edit) => edit_key(app, edit, key),
+        Mode::Reschedule(reschedule) => reschedule_key(app, reschedule, key),
         Mode::Overlay(overlay) => overlay_key(app, overlay, key),
     }
 }
@@ -146,6 +148,44 @@ fn picker_key(app: &mut App, mut picker: Picker, key: KeyEvent) {
         picker.refilter();
     }
     app.mode = Mode::Picker(picker);
+}
+
+fn reschedule_key(app: &mut App, mut reschedule: Box<Reschedule>, key: KeyEvent) {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let plain = |c: char| key.code == KeyCode::Char(c) && !ctrl;
+
+    if key.code == KeyCode::Esc || is_ctrl(&key, 'g') {
+        return;
+    }
+    if key.code == KeyCode::Enter {
+        app.apply_reschedule(&reschedule.task_id, Some(reschedule.cursor));
+        return;
+    }
+    // Some terminals send C-h as Backspace.
+    if is_ctrl(&key, 'h') || key.code == KeyCode::Backspace || key.code == KeyCode::Left || plain('h')
+    {
+        reschedule.move_days(-1);
+    } else if is_ctrl(&key, 'l') || key.code == KeyCode::Right || plain('l') {
+        reschedule.move_days(1);
+    } else if is_ctrl(&key, 'k') || key.code == KeyCode::Up || plain('k') {
+        reschedule.move_days(-7);
+    } else if is_ctrl(&key, 'j') || key.code == KeyCode::Down || plain('j') {
+        reschedule.move_days(7);
+    } else if is_ctrl(&key, 'p') || key.code == KeyCode::PageUp || key.code == KeyCode::Char('H') {
+        reschedule.move_months(-1);
+    } else if is_ctrl(&key, 'n') || key.code == KeyCode::PageDown || key.code == KeyCode::Char('L')
+    {
+        reschedule.move_months(1);
+    } else if let KeyCode::Char(c) = key.code {
+        let preset = reschedule::presets(reschedule.today)
+            .into_iter()
+            .find(|(key, ..)| *key == c && !ctrl);
+        if let Some((_, _, choice)) = preset {
+            app.apply_reschedule(&reschedule.task_id, choice);
+            return;
+        }
+    }
+    app.mode = Mode::Reschedule(reschedule);
 }
 
 fn edit_key(app: &mut App, mut edit: Box<TaskEdit>, key: KeyEvent) {

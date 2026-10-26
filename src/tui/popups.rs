@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
@@ -7,6 +8,7 @@ use super::utils::{centered_rect, dim, field_block, text_width, truncate, ACCENT
 use crate::{
     picker::Picker,
     quick_add::Suggestions,
+    reschedule::{month_grid, presets, Reschedule},
     task_edit::{Field, TaskEdit},
 };
 
@@ -166,4 +168,58 @@ pub fn suggestions(f: &mut Frame, echo: Rect, label: &str, suggest: &Suggestions
         area,
         &mut state,
     );
+}
+
+/// A month calendar with the cursor day highlighted and the preset keys below.
+pub fn reschedule(f: &mut Frame, state: &Reschedule) {
+    let weeks = month_grid(state.cursor);
+    // Border, weekday row, the weeks, a blank line and two lines of hints.
+    let height = (weeks.len() as u16 + 6).min(f.area().height);
+    let area = centered_rect(Constraint::Length(36), Constraint::Length(height), f.area());
+    f.render_widget(Clear, area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(ACCENT))
+        .title(format!(" {} ", state.cursor.format("%B %Y")))
+        .title_bottom(Line::from(Span::styled(" Enter set · Esc cancel ", dim())).centered());
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let mut lines = vec![Line::from(Span::styled(" Mo  Tu  We  Th  Fr  Sa  Su", dim()))];
+    for week in weeks {
+        let mut spans = vec![Span::raw(" ")];
+        for day in week {
+            let Some(day) = day else {
+                spans.push(Span::raw("    "));
+                continue;
+            };
+            let mut style = Style::default();
+            if day == state.today {
+                style = style.fg(Color::Yellow);
+            }
+            if Some(day) == state.current {
+                style = style.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+            }
+            if day == state.cursor {
+                style = style.add_modifier(Modifier::REVERSED);
+            }
+            spans.push(Span::styled(format!("{:>2}", day.day()), style));
+            spans.push(Span::raw("  "));
+        }
+        lines.push(Line::from(spans));
+    }
+
+    lines.push(Line::default());
+    let key = Style::default().fg(ACCENT);
+    let mut hints = Vec::new();
+    for (c, label, _) in presets(state.today) {
+        hints.push(Span::styled(c.to_string(), key));
+        hints.push(Span::styled(format!(" {label}  "), dim()));
+    }
+    // Two presets per row would be too tight; split the six into two lines.
+    let second = hints.split_off(hints.len() / 2);
+    lines.push(Line::from(hints));
+    lines.push(Line::from(second));
+    f.render_widget(Paragraph::new(lines), inner);
 }

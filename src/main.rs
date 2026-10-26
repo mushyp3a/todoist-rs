@@ -17,6 +17,7 @@ mod picker;
 mod projects;
 mod prompt;
 mod quick_add;
+mod reschedule;
 mod sections;
 mod store;
 mod task_edit;

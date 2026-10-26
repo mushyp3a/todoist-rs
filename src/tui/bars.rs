@@ -13,7 +13,7 @@ const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
 fn badge(app: &App) -> Span<'static> {
     let (text, color) = match &app.mode {
         Mode::Normal => (" NORMAL ", Color::Green),
-        Mode::Prompt(_) | Mode::Edit(_) | Mode::Picker(_) => (" INSERT ", Color::Yellow),
+        Mode::Prompt(_) | Mode::Edit(_) | Mode::Picker(_) | Mode::Reschedule(_) => (" INSERT ", Color::Yellow),
         Mode::Overlay(Overlay::Help) => (" HELP ", Color::Magenta),
         Mode::Overlay(Overlay::Messages) => (" MESSAGES ", Color::Magenta),
     };

@@ -37,6 +37,7 @@ Today includes overdue tasks, which appear under an "Overdue" heading. Changes y
 | `1` `2` `3` `4` | set priority |
 | `>` / `<` | postpone a day / move a day earlier |
 | `D` | set the due date (natural language; empty clears it) |
+| `R` | reschedule: quick presets and a calendar popup (see below) |
 | `r` | rename |
 | `T` | edit labels |
 | `m` | move to another project (fuzzy picker) |
@@ -53,6 +54,12 @@ buy milk tomorrow 5pm p1 #shopping @errands
 ```
 
 Dates (`tomorrow`, `every monday`, `25 dec`), priority (`p1`–`p4`), project (`#project`) and existing labels (`@label`) are parsed by Todoist. Without `#project`, the task goes to the project you are viewing, or the Inbox. In the Today view it is due today, and in a label view it gets that label.
+
+### Reschedule
+
+`R` (or `SPC m s`) opens a small month calendar on the task's due date (today if it has none). Move the highlighted day with `C-h` / `C-l` (day) and `C-k` / `C-j` (week); `H` / `L` or `C-p` / `C-n` change month. Plain `h j k l` and the arrow keys work too. `Enter` sets the date, `Esc` cancels. The time of day is kept, and `u` undoes it.
+
+Presets set the date straight away: `t` today, `m` tomorrow, `w` next Monday, `n` in a week, `s` the weekend, `x` clears the date. Recurring tasks keep their rule: the schedule simply continues from the date you pick.
 
 ### Edit panel
 

@@ -1,5 +1,6 @@
 //! What each key binding does to the app.
 
+use chrono::NaiveDate;
 use serde_json::{json, Value};
 
 use crate::{
@@ -11,6 +12,7 @@ use crate::{
     keymap::Action,
     picker::{PickItem, PickTarget, Picker, PickerKind},
     prompt::{Prompt, PromptKind},
+    reschedule::Reschedule,
     task_edit::{parse_labels, TaskEdit},
     tasks::{api_priority, Due, Task},
     view::{ordered_projects, Row, SidebarEntry, Sort, View},
@@ -83,6 +85,7 @@ impl App {
                         .map_or(String::new(), |due| due.string.clone()),
                 )
             }),
+            Reschedule => self.open_reschedule(),
             Rename => self.prompt_for_task(|task| {
                 (PromptKind::Rename(task.id.clone()), task.content.clone())
             }),
@@ -353,6 +356,50 @@ impl App {
         let id = task.id.clone();
         let body = json!({ "due_string": new_due.api_string() });
         self.mutate(&id, |task| task.due = Some(new_due), body, None);
+    }
+
+    fn open_reschedule(&mut self) {
+        let today = self.today();
+        let Some(task) = self.selected_task() else {
+            self.error("No task selected");
+            return;
+        };
+        let current = task.due.as_ref().map(|due| due.date);
+        let state = Reschedule::new(task.id.clone(), today, current);
+        self.mode = Mode::Reschedule(Box::new(state));
+    }
+
+    /// Sets the task's due date to `date`, or clears it, keeping any time of day.
+    pub fn apply_reschedule(&mut self, id: &str, date: Option<NaiveDate>) {
+        let Some(task) = self.store.task(id) else {
+            return;
+        };
+        let Some(date) = date else {
+            if task.due.is_some() {
+                self.mutate(id, |task| task.due = None, json!({ "due_string": "no date" }), None);
+            }
+            return;
+        };
+        // A recurring task keeps its rule; the schedule carries on from the new date.
+        let (new_due, body) = match &task.due {
+            Some(due) if due.is_recurring => {
+                let new_due = Due {
+                    date,
+                    ..due.clone()
+                };
+                let body = json!({ "due_date": date.format("%Y-%m-%d").to_string() });
+                (new_due, body)
+            }
+            existing => {
+                let new_due = Due::local(date, existing.as_ref().and_then(|due| due.time));
+                let body = json!({ "due_string": new_due.api_string() });
+                (new_due, body)
+            }
+        };
+        if task.due.as_ref().is_some_and(|due| due.same_as(&new_due)) {
+            return;
+        }
+        self.mutate(id, |task| task.due = Some(new_due), body, None);
     }
 
     fn open_move_picker(&mut self) {
