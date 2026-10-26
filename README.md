@@ -29,6 +29,12 @@ cargo install --git https://github.com/mushyp3a/todoist-rs.git --locked
 
 Run the same command to update. Make sure `~/.cargo/bin` is on your `PATH`, then start it with `todoist`. On first run it asks for your API token (Todoist → Settings → Integrations → Developer).
 
+### Local
+
+```
+cargo install --path . --locked
+```
+
 ## Project layout
 
 - `main.rs`: startup and the event loop
