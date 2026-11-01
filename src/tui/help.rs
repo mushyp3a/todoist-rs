@@ -55,14 +55,10 @@ fn section(title: &'static str, belongs: impl Fn(&str) -> bool) -> Vec<Line<'sta
 
 pub fn help(f: &mut Frame, scroll: u16) {
     let mut lines = vec![Line::from(Span::styled(
-        "Press SPC (or g, s, z) and wait: a menu shows what comes next.",
+        "Press SPC, d, g, s or p and wait: a menu shows what comes next.",
         dim(),
     ))];
-    lines.extend(section("Normal mode", |s| !s.starts_with("SPC")));
-    lines.extend(section("Leader: SPC", |s| {
-        s.starts_with("SPC") && !s.starts_with("SPC m")
-    }));
-    lines.extend(section("Task commands: SPC m", |s| s.starts_with("SPC m")));
+    lines.extend(section("Keybindings", |_| true));
     let panels: [(&str, &[(&str, &str)]); 2] = [
         (
             "Edit panel",

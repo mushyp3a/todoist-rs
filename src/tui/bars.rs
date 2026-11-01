@@ -3,49 +3,15 @@ use ratatui::{prelude::*, widgets::Paragraph};
 use super::utils::{dim, text_width};
 use crate::{
     api_calls,
-    app::{App, Level, Mode, Overlay},
+    app::{App, Level, Mode},
     prompt::{Prompt, PromptKind},
     quick_add::{tokenize, TokenKind},
 };
 
 const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
-fn badge(app: &App) -> Span<'static> {
-    let (text, color) = match &app.mode {
-        Mode::Normal => (" NORMAL ", Color::Green),
-        Mode::Prompt(_) | Mode::Edit(_) | Mode::Picker(_) | Mode::Reschedule(_) => (" INSERT ", Color::Yellow),
-        Mode::Overlay(Overlay::Help) => (" HELP ", Color::Magenta),
-        Mode::Overlay(Overlay::Messages) => (" MESSAGES ", Color::Magenta),
-    };
-    Span::styled(
-        text,
-        Style::default()
-            .fg(Color::Black)
-            .bg(color)
-            .add_modifier(Modifier::BOLD),
-    )
-}
-
-/// The status bar: mode, current view, pending keys and sync state.
-pub fn modeline(f: &mut Frame, area: Rect, app: &App) {
-    let mut left = vec![badge(app)];
-    let name = if app.search.is_empty() {
-        app.view.title(&app.store)
-    } else {
-        format!("/{}", app.search)
-    };
-    left.push(Span::styled(
-        format!(" {name} "),
-        Style::default().add_modifier(Modifier::BOLD),
-    ));
-    left.push(Span::styled(format!("{} tasks", app.task_count()), dim()));
-    if let Some(task) = app.selected_task() {
-        left.push(Span::styled(
-            format!("  {}", app.store.project_name(&task.project_id)),
-            dim(),
-        ));
-    }
-
+/// Pending keys and sync state, shown at the right of the bottom bar.
+fn status_right(app: &App) -> Vec<Span<'static>> {
     let mut right = Vec::new();
     if !app.pending_keys.is_empty() {
         right.push(Span::styled(
@@ -65,17 +31,30 @@ pub fn modeline(f: &mut Frame, area: Rect, app: &App) {
     } else if app.loaded {
         right.push(Span::styled("✓ synced ", Style::default().fg(Color::Green)));
     }
+    right
+}
 
-    let right_width: usize = right.iter().map(|span| text_width(&span.content)).sum();
-    f.render_widget(Paragraph::new(Line::from(left)), area);
-    if right_width < area.width as usize {
-        let rect = Rect {
-            x: area.x + area.width - right_width as u16,
-            width: right_width as u16,
-            ..area
-        };
-        f.render_widget(Paragraph::new(Line::from(right)), rect);
+/// lazygit-style `key action` hints.
+fn hints() -> Line<'static> {
+    let items = [
+        ("space space", "complete"),
+        ("a", "add"),
+        ("e", "edit"),
+        ("d d", "delete"),
+        ("/", "filter"),
+        ("tab", "panel"),
+        ("?", "keybindings"),
+        ("q", "quit"),
+    ];
+    let mut spans = vec![Span::raw(" ")];
+    for (key, action) in items {
+        spans.push(Span::styled(
+            key,
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled(format!(": {action}  "), dim()));
     }
+    Line::from(spans)
 }
 
 /// The line under the status bar: prompts, messages, or a hint.
@@ -115,13 +94,21 @@ pub fn echo_area(f: &mut Frame, area: Rect, app: &mut App) {
                 style,
             ))
         }
-        None if matches!(app.mode, Mode::Normal) => Line::from(Span::styled(
-            " SPC menu · a add · x done · / search · ? help",
-            dim(),
-        )),
+        None if matches!(app.mode, Mode::Normal) => hints(),
         None => Line::default(),
     };
     f.render_widget(Paragraph::new(line), area);
+
+    let right = status_right(app);
+    let right_width: usize = right.iter().map(|span| text_width(&span.content)).sum();
+    if right_width < area.width as usize {
+        let rect = Rect {
+            x: area.x + area.width - right_width as u16,
+            width: right_width as u16,
+            ..area
+        };
+        f.render_widget(Paragraph::new(Line::from(right)), rect);
+    }
 }
 
 /// Quick-add input with the parts Todoist will recognise coloured.

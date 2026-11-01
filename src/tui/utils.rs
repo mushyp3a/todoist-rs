@@ -1,10 +1,31 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders},
+    widgets::{Block, BorderType, Borders},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub const ACCENT: Color = Color::Cyan;
+/// Border colour of the focused panel (as in lazygit).
+pub const FOCUS: Color = Color::Green;
+/// Background of the selected line.
+pub const SELECTED_BG: Color = Color::Blue;
+
+/// A rounded panel; the focused one gets a green border and a bold title.
+pub fn panel(title: impl Into<String>, focused: bool) -> Block<'static> {
+    let (border, title_style) = if focused {
+        (
+            Style::default().fg(FOCUS),
+            Style::default().fg(FOCUS).add_modifier(Modifier::BOLD),
+        )
+    } else {
+        (Style::default(), Style::default().add_modifier(Modifier::BOLD))
+    };
+    Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(border)
+        .title(Span::styled(format!(" {} ", title.into()), title_style))
+}
 
 pub fn dim() -> Style {
     Style::default().add_modifier(Modifier::DIM)
@@ -17,9 +38,10 @@ pub fn centered_rect(width: Constraint, height: Constraint, area: Rect) -> Rect 
 
 /// A bordered input box, highlighted when it is the focused field.
 pub fn field_block(title: &str, active: bool) -> Block<'static> {
-    let color = if active { ACCENT } else { Color::Reset };
+    let color = if active { FOCUS } else { Color::Reset };
     Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(color))
         .title(format!(" {title} "))
 }

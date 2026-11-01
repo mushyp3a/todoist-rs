@@ -4,7 +4,7 @@ use ratatui::{
     widgets::{List, ListItem, Paragraph},
 };
 
-use super::utils::{dim, text_width, truncate, ACCENT};
+use super::utils::{dim, panel, text_width, truncate, ACCENT, SELECTED_BG};
 use crate::{
     app::{App, Focus},
     tasks::{Due, Task},
@@ -12,11 +12,13 @@ use crate::{
 };
 
 pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
-    let [title_area, body] =
-        Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).areas(area);
+    let block = panel(title(app), app.focus == Focus::List).title_bottom(
+        Line::from(Span::styled(format!(" {} tasks ", app.task_count()), dim()))
+            .right_aligned(),
+    );
+    let body = block.inner(area);
+    f.render_widget(block, area);
     app.list_height = body.height as usize;
-
-    f.render_widget(Paragraph::new(title(app)), title_area);
 
     if app.rows.is_empty() {
         let message = if !app.loaded {
@@ -50,7 +52,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
         .collect();
 
     let highlight = if app.focus == Focus::List {
-        Style::default().add_modifier(Modifier::REVERSED)
+        Style::default().bg(SELECTED_BG).add_modifier(Modifier::BOLD)
     } else {
         Style::default().add_modifier(Modifier::BOLD)
     };
@@ -61,26 +63,16 @@ pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
     );
 }
 
-fn title(app: &App) -> Line<'static> {
-    let name = if app.search.is_empty() {
+fn title(app: &App) -> String {
+    let mut name = if app.search.is_empty() {
         app.view.title(&app.store)
     } else {
         format!("Search: {}", app.search)
     };
-    let mut spans = vec![
-        Span::styled(
-            format!(" {name}"),
-            Style::default().add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(format!("  {}", app.task_count()), dim()),
-    ];
     if app.sort != crate::view::Sort::Natural {
-        spans.push(Span::styled(
-            format!("  sorted by {}", app.sort.label()),
-            dim(),
-        ));
+        name.push_str(&format!(" · sorted by {}", app.sort.label()));
     }
-    Line::from(spans)
+    name
 }
 
 fn header_item(text: &str, kind: HeaderKind) -> ListItem<'static> {

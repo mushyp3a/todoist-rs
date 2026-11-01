@@ -1,16 +1,16 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{List, ListItem},
 };
 
-use super::utils::{dim, text_width, truncate, ACCENT};
+use super::utils::{dim, panel, text_width, truncate, SELECTED_BG};
 use crate::{
     app::{App, Focus},
     view::SidebarEntry,
 };
 
 pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
-    let block = Block::default().borders(Borders::RIGHT).border_style(dim());
+    let block = panel("Views", app.focus == Focus::Sidebar);
     let inner_width = block.inner(area).width as usize;
 
     let items: Vec<ListItem> = app
@@ -55,9 +55,9 @@ pub fn render(f: &mut Frame, area: Rect, app: &mut App) {
         .collect();
 
     let highlight = if app.focus == Focus::Sidebar {
-        Style::default().add_modifier(Modifier::REVERSED)
+        Style::default().bg(SELECTED_BG).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+        Style::default().add_modifier(Modifier::BOLD)
     };
     let list = List::new(items).block(block).highlight_style(highlight);
     f.render_stateful_widget(list, area, &mut app.sidebar_state);

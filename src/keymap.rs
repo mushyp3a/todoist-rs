@@ -1,7 +1,7 @@
 //! Every normal-mode key binding, in one table.
 //!
 //! The table drives dispatch, the which-key popup and the help screen, so they
-//! can't disagree. Sequences are space-separated tokens: `g t`, `SPC m e`, `C-d`.
+//! can't disagree. Sequences are space-separated tokens: `g t`, `p 1`, `C-d`.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -21,11 +21,10 @@ pub enum Action {
     Right,
     Open,
     FocusSidebar,
+    NextPanel,
     FocusList,
     ToggleSidebar,
     ToggleFold,
-    Fold,
-    Unfold,
     FoldAll,
     UnfoldAll,
     Edit,
@@ -63,13 +62,13 @@ pub enum Action {
 use Action::*;
 
 pub const BINDINGS: &[(&str, &str, Action)] = &[
-    // Movement
+    // Navigation
     ("j", "next line", Down),
     ("down", "next line", Down),
     ("k", "previous line", Up),
     ("up", "previous line", Up),
-    ("g g", "top", Top),
-    ("G", "bottom", Bottom),
+    ("<", "scroll to top", Top),
+    (">", "scroll to bottom", Bottom),
     ("C-d", "half page down", HalfPageDown),
     ("C-u", "half page up", HalfPageUp),
     ("}", "next section", NextHeader),
@@ -78,92 +77,57 @@ pub const BINDINGS: &[(&str, &str, Action)] = &[
     ("left", "collapse / sidebar", Left),
     ("l", "expand / list", Right),
     ("right", "expand / list", Right),
-    ("RET", "open", Open),
+    ("TAB", "next panel", NextPanel),
+    ("1", "focus views panel", FocusSidebar),
+    ("2", "focus tasks panel", FocusList),
+    ("|", "toggle views panel", ToggleSidebar),
+    ("RET", "open / edit", Open),
     // Folding
-    ("TAB", "toggle fold", ToggleFold),
-    ("z a", "toggle fold", ToggleFold),
-    ("z o", "open fold", Unfold),
-    ("z c", "close fold", Fold),
-    ("z R", "open all folds", UnfoldAll),
-    ("z M", "close all folds", FoldAll),
+    ("f", "toggle fold", ToggleFold),
+    ("-", "collapse all", FoldAll),
+    ("+", "expand all", UnfoldAll),
     // Tasks
-    ("e", "edit task", Edit),
-    ("x", "complete", Complete),
-    ("d d", "delete", Delete),
-    ("u", "undo", Undo),
-    ("1", "priority 1", Priority(1)),
-    ("2", "priority 2", Priority(2)),
-    ("3", "priority 3", Priority(3)),
-    ("4", "priority 4", Priority(4)),
-    (">", "postpone a day", Postpone(1)),
-    ("<", "move a day earlier", Postpone(-1)),
-    ("D", "set due date", SetDue),
-    ("R", "reschedule", Reschedule),
-    ("r", "rename", Rename),
-    ("T", "edit labels", EditLabels),
-    ("m", "move to project", Move),
+    ("SPC SPC", "complete (press twice)", Complete),
     ("a", "add task", Add),
     ("A", "add sub-task", AddSubtask),
-    // Search and views
-    ("/", "search", Search),
-    ("ESC", "cancel / clear search", Cancel),
+    ("e", "edit task", Edit),
+    ("r", "rename", Rename),
+    ("d d", "delete (press twice)", Delete),
+    ("z", "undo", Undo),
+    ("m", "move to project", Move),
+    ("T", "edit labels", EditLabels),
+    ("D", "set due date", SetDue),
+    ("t", "reschedule", Reschedule),
+    ("]", "postpone a day", Postpone(1)),
+    ("[", "move a day earlier", Postpone(-1)),
+    ("p 1", "priority 1", Priority(1)),
+    ("p 2", "priority 2", Priority(2)),
+    ("p 3", "priority 3", Priority(3)),
+    ("p 4", "priority 4", Priority(4)),
+    // Filtering, views and sorting
+    ("/", "filter", Search),
+    ("ESC", "cancel / clear filter", Cancel),
+    ("C-p", "jump to view / project / label", Jump),
     ("g t", "today", GotoToday),
     ("g u", "upcoming", GotoUpcoming),
     ("g i", "inbox", GotoInbox),
     ("g a", "all tasks", GotoAll),
     ("g o", "overdue", GotoOverdue),
     ("g p", "jump to project / label", Jump),
-    ("g r", "refresh", Refresh),
     ("s n", "sort: natural", SortNatural),
     ("s d", "sort: date", SortDate),
     ("s p", "sort: priority", SortPriority),
-    ("?", "help", Help),
+    ("o", "cycle sort order", CycleSort),
+    // General
+    ("R", "refresh", Refresh),
+    ("@", "messages", Messages),
+    ("?", "keybindings", Help),
+    ("x", "keybindings", Help),
     ("q", "quit", Quit),
-    // Leader
-    ("SPC SPC", "jump to view / project / label", Jump),
-    ("SPC /", "search", Search),
-    ("SPC a", "add task", Add),
-    ("SPC A", "add sub-task", AddSubtask),
-    ("SPC u", "undo", Undo),
-    ("SPC r r", "refresh", Refresh),
-    ("SPC t s", "toggle sidebar", ToggleSidebar),
-    ("SPC t o", "cycle sort order", CycleSort),
-    ("SPC w h", "focus sidebar", FocusSidebar),
-    ("SPC w l", "focus list", FocusList),
-    ("SPC m e", "edit", Edit),
-    ("SPC m d", "due date", SetDue),
-    ("SPC m s", "reschedule", Reschedule),
-    ("SPC m r", "rename", Rename),
-    ("SPC m t", "labels", EditLabels),
-    ("SPC m m", "move to project", Move),
-    ("SPC m x", "complete", Complete),
-    ("SPC m k", "delete", Delete),
-    ("SPC m a", "add sub-task", AddSubtask),
-    ("SPC m >", "postpone a day", Postpone(1)),
-    ("SPC m <", "move a day earlier", Postpone(-1)),
-    ("SPC m 1", "priority 1", Priority(1)),
-    ("SPC m 2", "priority 2", Priority(2)),
-    ("SPC m 3", "priority 3", Priority(3)),
-    ("SPC m 4", "priority 4", Priority(4)),
-    ("SPC h h", "help", Help),
-    ("SPC h m", "messages", Messages),
-    ("SPC q q", "quit", Quit),
 ];
 
 /// Names of key prefixes, shown by which-key as `+name`.
-const GROUPS: &[(&str, &str)] = &[
-    ("SPC", "leader"),
-    ("SPC m", "task"),
-    ("SPC t", "toggle"),
-    ("SPC w", "window"),
-    ("SPC r", "refresh"),
-    ("SPC h", "help"),
-    ("SPC q", "quit"),
-    ("g", "go"),
-    ("s", "sort"),
-    ("z", "fold"),
-    ("d", "delete"),
-];
+const GROUPS: &[(&str, &str)] = &[("g", "go to"), ("s", "sort"), ("p", "priority")];
 
 pub enum Lookup {
     Action(Action),
@@ -263,7 +227,7 @@ mod tests {
     #[test]
     fn single_and_multi_key_bindings_resolve() {
         assert!(matches!(
-            lookup(&seq(&["x"])),
+            lookup(&seq(&["SPC", "SPC"])),
             Lookup::Action(Action::Complete)
         ));
         assert!(matches!(lookup(&seq(&["g"])), Lookup::Pending));
@@ -272,21 +236,14 @@ mod tests {
             Lookup::Action(Action::GotoToday)
         ));
         assert!(matches!(
-            lookup(&seq(&["SPC", "m", "e"])),
-            Lookup::Action(Action::Edit)
+            lookup(&seq(&["p", "1"])),
+            Lookup::Action(Action::Priority(1))
         ));
         assert!(matches!(lookup(&seq(&["g", "z"])), Lookup::Unbound));
     }
 
     #[test]
-    fn which_key_lists_next_keys_and_groups() {
-        let leader = hints(&seq(&["SPC"]));
-        assert!(leader
-            .iter()
-            .any(|hint| hint.key == "m" && hint.text == "+task"));
-        assert!(leader
-            .iter()
-            .any(|hint| hint.key == "a" && hint.text == "add task"));
+    fn which_key_lists_next_keys() {
         let go = hints(&seq(&["g"]));
         assert!(go
             .iter()

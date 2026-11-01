@@ -47,6 +47,13 @@ impl App {
                 self.focus = Focus::Sidebar;
             }
             FocusList => self.focus = Focus::List,
+            NextPanel => {
+                if self.focus == Focus::List && self.show_sidebar {
+                    self.focus = Focus::Sidebar;
+                } else {
+                    self.focus = Focus::List;
+                }
+            }
             ToggleSidebar => {
                 self.show_sidebar = !self.show_sidebar;
                 if !self.show_sidebar {
@@ -54,8 +61,6 @@ impl App {
                 }
             }
             ToggleFold => self.toggle_fold(),
-            Fold => self.set_fold(true),
-            Unfold => self.set_fold(false),
             FoldAll => {
                 self.folded = self
                     .rows

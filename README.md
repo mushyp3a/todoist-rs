@@ -1,10 +1,10 @@
 # Todoist Terminal Client
 
-A keyboard-driven Todoist client for the terminal, with Doom Emacs-style keys: Vim movement, a `SPC` leader and a which-key menu.
+A keyboard-driven Todoist client for the terminal, laid out and keyed like lazygit: bordered panels, single-key commands and a hint bar.
 
 ## Features
 
-- Doom Emacs-style keys: Vim movement, a `SPC` leader and a which-key menu, so every binding is discoverable (`?` lists them all)
+- lazygit-style panels and keys (`?` lists every binding; `g`, `s`, `p` open small menus)
 - Views for Inbox, Today (with overdue), Upcoming, All, projects (as a tree, with sections) and labels
 - Quick add with Todoist's natural-language syntax: `buy milk tomorrow 5pm p1 #shopping @errands`
 - Single-key edits: complete, delete, undo, priority, postpone, reschedule (presets + calendar popup), due date, rename, labels, move
